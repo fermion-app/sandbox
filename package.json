@@ -1,0 +1,32 @@
+{
+  "name": "fermion-sandbox",
+  "version": "1.0.0",
+  "description": "Standalone SDK for managing Fermion sandbox environments",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/example.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "sandbox",
+    "fermion",
+    "code-execution",
+    "container"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "nanoid": "^3.3.6",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
