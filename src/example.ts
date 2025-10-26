@@ -14,7 +14,7 @@ async function main() {
 		// Create a new sandbox instance
 		// Snippet will be auto-created with a random name
 		const sandbox = await Sandbox.create({
-			gitRepoUrl: 'https://github.com/mehulmpt/empty' // Your Git repository URL
+			gitRepoUrl: 'https://github.com/gautamtayal1/solo' // Your Git repository URL
 		})
 
 		console.log('Sandbox created successfully!')
@@ -22,39 +22,107 @@ async function main() {
 		console.log('Container Details:', sandbox.getContainerDetails())
 
 		// Test command execution
-		console.log('\nTesting command execution...')
+		console.log('\n=== Testing Command Execution ===')
 
-		// Test 1: Echo command
-		const echoResult = await sandbox.runCommand({
+		// Test 1: runSmallCommand - Simple echo
+		console.log('\n--- Test 1: runSmallCommand (echo) ---')
+		const echoResult = await sandbox.runSmallCommand({
 			cmd: 'echo',
 			args: ['Hello from Fermion Sandbox!']
 		})
 		console.log('Echo result:', {
-			stdout: echoResult?.stdout || '(empty)',
-			exitCode: echoResult?.exitCode
+			stdout: echoResult.stdout.trim(),
+			stderr: echoResult.stderr,
+			exitCode: echoResult.exitCode
 		})
 
-		// Test 2: Check current directory
-		const pwdResult = await sandbox.runCommand({
+		// Test 2: runSmallCommand - Check current directory
+		console.log('\n--- Test 2: runSmallCommand (pwd) ---')
+		const pwdResult = await sandbox.runSmallCommand({
 			cmd: 'pwd'
 		})
 		console.log('Current directory:', {
-			stdout: pwdResult?.stdout?.trim() || '(empty)',
-			exitCode: pwdResult?.exitCode
+			stdout: pwdResult.stdout.trim(),
+			exitCode: pwdResult.exitCode
 		})
 
-		// Test 3: List files
-		const lsResult = await sandbox.runCommand({
+		// Test 3: runSmallCommand - List files
+		console.log('\n--- Test 3: runSmallCommand (ls) ---')
+		const lsResult = await sandbox.runSmallCommand({
 			cmd: 'ls',
 			args: ['-la', '/home/damner/code']
 		})
 		console.log('Files in /home/damner/code:', {
-			stdout: lsResult?.stdout || '(empty)',
-			exitCode: lsResult?.exitCode
+			lines: lsResult.stdout.split('\n').length,
+			exitCode: lsResult.exitCode
+		})
+
+		// Test 4: runStreamingCommand - Echo with callbacks
+		console.log('\n--- Test 4: runStreamingCommand (echo) ---')
+		await sandbox.runStreamingCommand({
+			cmd: 'echo',
+			args: ['Streaming output test!'],
+			onStdout: (stdout) => {
+				console.log('[Streaming stdout]:', stdout.trim())
+			},
+			onStderr: (stderr) => {
+				console.log('[Streaming stderr]:', stderr)
+			},
+			onClose: (exitCode) => {
+				console.log('[Streaming close] Exit code:', exitCode)
+			}
+		})
+
+		// Test 5: runStreamingCommand - Long running command with multiple outputs
+		console.log('\n--- Test 5: runStreamingCommand (long running with streaming) ---')
+		await sandbox.runStreamingCommand({
+			cmd: 'sh',
+			args: ['-c', 'for i in 1 2 3 4 5; do echo "Progress: $i/5"; sleep 1; done; echo "Complete!"'],
+			onStdout: (stdout) => {
+				process.stdout.write(stdout)
+			},
+			onStderr: (stderr) => {
+				process.stderr.write(stderr)
+			},
+			onClose: (exitCode) => {
+				console.log(`\n[Process exited with code: ${exitCode}]`)
+			}
+		})
+
+		// Test 6: runStreamingCommand - Real-time command output (npm install simulation)
+		console.log('\n--- Test 6: runStreamingCommand (simulating package manager) ---')
+		await sandbox.runStreamingCommand({
+			cmd: 'sh',
+			args: ['-c', `
+				echo "Installing packages...";
+				sleep 0.5;
+				echo "✓ lodash@4.17.21";
+				sleep 0.5;
+				echo "✓ express@4.18.2";
+				sleep 0.5;
+				echo "✓ typescript@5.0.0";
+				sleep 0.5;
+				echo "";
+				echo "Done! 3 packages installed."
+			`],
+			onStdout: (stdout) => {
+				process.stdout.write(stdout)
+			},
+			onClose: (exitCode) => {
+				console.log(`[Installation complete with exit code: ${exitCode}]`)
+			}
+		})
+
+		await sandbox.runStreamingCommand({
+			cmd: 'npm',
+			args: ['install', 'lodash', 'express', 'typescript', 'express-handlebars', 'express-session', 'express-validator', 'express-flash', 'express-helmet', 'express-rate-limit', 'express-sanitizer', 'express-session', 'express-validator', 'express-flash', 'express-helmet', 'express-rate-limit', 'express-sanitizer'],
+			onStdout: (stdout) => {
+				process.stdout.write(stdout)
+			}
 		})
 
 		// Test file operations
-		console.log('\nTesting file operations...')
+		console.log('\n=== Testing File Operations ===')
 
 		// Write a file
 		console.log('Writing file: /home/damner/code/hello.txt')
@@ -73,15 +141,15 @@ async function main() {
 console.log('Current time:', new Date().toISOString())`
 		)
 
-		// Run the Node.js file
+		// Run the Node.js file using runSmallCommand
 		console.log('Running Node.js file...')
-		const nodeResult = await sandbox.runCommand({
+		const nodeResult = await sandbox.runSmallCommand({
 			cmd: 'node',
 			args: ['/home/damner/code/test.js']
 		})
 		console.log('Node.js output:', {
-			stdout: nodeResult?.stdout || '(empty)',
-			exitCode: nodeResult?.exitCode
+			stdout: nodeResult.stdout,
+			exitCode: nodeResult.exitCode
 		})
 
 		// Keep the sandbox alive for testing

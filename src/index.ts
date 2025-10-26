@@ -322,11 +322,14 @@ export class Sandbox {
 		await this.ws.send('RemoveFileOrFolder', { fullPath: path })
 	}
 
-	async runCommand(options: {
+	async runStreamingCommand(options: {
 		cmd: string
 		args?: string[]
 		stdin?: string
-	}): Promise<{ stdout: string; stderr: string; exitCode: number } | undefined> {
+		onStdout?: (stdout: string) => void
+		onStderr?: (stderr: string) => void
+		onClose?: (exitCode: number) => void
+	}): Promise<void> {
 		if (!this.ws) {
 			throw new Error('Not connected')
 		}
@@ -342,10 +345,6 @@ export class Sandbox {
 		})
 
 		const { uniqueTaskId } = startResponse.data
-
-		let stdout = ''
-		let stderr = ''
-		let exitCode = 0
 
 		while (this.ws.isConnected()) {
 			const payload = await this.ws.waitForNextFutureWebSocketEvent(
@@ -365,20 +364,55 @@ export class Sandbox {
 
 			if (eventDetails.type === 'io') {
 				if (eventDetails.stdout) {
-					stdout += eventDetails.stdout
+					options.onStdout?.(eventDetails.stdout)
 				}
 				if (eventDetails.stderr) {
-					stderr += eventDetails.stderr
+					options.onStderr?.(eventDetails.stderr)
 				}
 			} else if (eventDetails.type === 'close') {
-				exitCode = eventDetails.code ?? 0
+				const exitCode = eventDetails.code ?? 0
 
 				if (eventDetails.error) {
 					throw new Error(eventDetails.error)
 				}
 
-				return { stdout, stderr, exitCode }
+				options.onClose?.(exitCode)
+
+				return
 			}
+		}
+	}
+
+	async runSmallCommand(options: {
+		cmd: string
+		args?: string[]
+		stdin?: string
+	}): Promise<{
+		stdout: string
+		stderr: string
+		exitCode: number
+	}> {
+		if (!this.ws) {
+			throw new Error('Not connected')
+		}
+
+		// Build the full command with args
+		const fullCommand = options.args
+			? `${options.cmd} ${options.args.join(' ')}`
+			: options.cmd
+
+		const response = await this.ws.send<{
+			stdout: string
+			stderr: string
+			exitCode?: number
+		}>('EvalSmallCodeSnippetInsideContainer', {
+			command: fullCommand
+		})
+
+		return {
+			stdout: response.stdout || '',
+			stderr: response.stderr || '',
+			exitCode: response.exitCode ?? 0
 		}
 	}
 
