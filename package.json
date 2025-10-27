@@ -20,8 +20,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "nanoid": "^3.3.6",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

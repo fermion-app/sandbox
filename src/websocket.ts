@@ -259,7 +259,6 @@ export class SandboxWebSocket {
 		message: string
 		shouldThrowOnError: boolean
 	}): void {
-		// If not connected, queue the message
 		if (this.connectionState !== 'connected' || !this.ws) {
 			this.messagesData.push(message)
 			return

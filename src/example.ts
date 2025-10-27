@@ -14,7 +14,8 @@ async function main() {
 		// Create a new sandbox instance
 		// Snippet will be auto-created with a random name
 		const sandbox = await Sandbox.create({
-			gitRepoUrl: 'https://github.com/gautamtayal1/solo' // Your Git repository URL
+			gitRepoUrl: 'https://github.com/gautamtayal1/solo',
+			timeoutMs: 120000
 		})
 
 		console.log('Sandbox created successfully!')
@@ -26,7 +27,7 @@ async function main() {
 
 		// Test 1: runSmallCommand - Simple echo
 		console.log('\n--- Test 1: runSmallCommand (echo) ---')
-		const echoResult = await sandbox.runSmallCommand({
+		const echoResult = await sandbox.runCommand({
 			cmd: 'echo',
 			args: ['Hello from Fermion Sandbox!']
 		})
@@ -38,7 +39,7 @@ async function main() {
 
 		// Test 2: runSmallCommand - Check current directory
 		console.log('\n--- Test 2: runSmallCommand (pwd) ---')
-		const pwdResult = await sandbox.runSmallCommand({
+		const pwdResult = await sandbox.runCommand({
 			cmd: 'pwd'
 		})
 		console.log('Current directory:', {
@@ -48,7 +49,7 @@ async function main() {
 
 		// Test 3: runSmallCommand - List files
 		console.log('\n--- Test 3: runSmallCommand (ls) ---')
-		const lsResult = await sandbox.runSmallCommand({
+		const lsResult = await sandbox.runCommand({
 			cmd: 'ls',
 			args: ['-la', '/home/damner/code']
 		})
@@ -143,7 +144,7 @@ console.log('Current time:', new Date().toISOString())`
 
 		// Run the Node.js file using runSmallCommand
 		console.log('Running Node.js file...')
-		const nodeResult = await sandbox.runSmallCommand({
+		const nodeResult = await sandbox.runCommand({
 			cmd: 'node',
 			args: ['/home/damner/code/test.js']
 		})
