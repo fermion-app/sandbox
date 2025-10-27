@@ -218,7 +218,7 @@ export class Sandbox {
 	}): Promise<{
 		stdout: string
 		stderr: string
-		exitCode: number
+		exitCode?: number
 	}> {
 		if (!this.ws) {
 			throw new Error('Not connected')
@@ -237,9 +237,9 @@ export class Sandbox {
 		})
 
 		return {
-			stdout: response.stdout || '',
-			stderr: response.stderr || '',
-			exitCode: response.exitCode ?? 0
+			stdout: response.stdout,
+			stderr: response.stderr,
+			exitCode: response.exitCode
 		}
 	}
 

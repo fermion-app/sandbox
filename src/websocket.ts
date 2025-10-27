@@ -123,7 +123,7 @@ export class SandboxWebSocket {
 
 		return deferredPromise.promise.then((payload: WebSocketResponsePayload) => {
 			if (payload.status === 'error') {
-				throw new Error(payload.error || 'Request failed')
+				throw new Error(payload.error)
 			}
 			return payload as T
 		})
@@ -197,7 +197,6 @@ export class SandboxWebSocket {
 			}
 		}
 
-		// Send first health ping after 5 seconds (matches frontend behavior)
 		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000)
 	}
 
@@ -235,7 +234,7 @@ export class SandboxWebSocket {
 			try {
 				await this.connect()
 			} catch (error) {
-				// Reconnect failed
+				console.error('[SandboxWebSocket] Reconnect failed', error)
 			}
 		}
 	}
@@ -286,20 +285,12 @@ export class SandboxWebSocket {
 			this.healthPingTimeoutId = null
 		}
 
-		const pendingCount = this.messageIdToWebSocketResponsePromiseMapping.size
-		if (pendingCount > 0) {
-			// Rejecting pending messages
-		}
 		this.messageIdToWebSocketResponsePromiseMapping.forEach(pending => {
 			clearTimeout(pending.timeoutId)
 			pending.deferredPromise.reject?.(new Error('WebSocket closed'))
 		})
 		this.messageIdToWebSocketResponsePromiseMapping.clear()
 
-		const waitersCount = this.waitQueueToEventTypePromiseMapping.size
-		if (waitersCount > 0) {
-			// Rejecting event waiters
-		}
 		this.waitQueueToEventTypePromiseMapping.forEach(waiter => {
 			waiter.reject?.(new Error('WebSocket closed'))
 		})
