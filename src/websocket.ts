@@ -22,11 +22,6 @@ export interface WebSocketMessage {
 	payload: WebSocketRequestPayload
 }
 
-export interface WebSocketResponse {
-	messageId: string
-	payload: WebSocketResponsePayload
-}
-
 export class SandboxWebSocket {
 	private ws: WebSocket | null = null
 	private url: string
@@ -50,40 +45,39 @@ export class SandboxWebSocket {
 	}
 
 	async connect(): Promise<void> {
-		if (this.connectionState === 'connected') {
-			return
+		if (this.connectionState !== 'connected') {
+			return new Promise((resolve, reject) => {
+				try {
+					this.connectionState = 'connecting'
+					const wsUrl = `${this.url}?token=${encodeURIComponent(this.token)}`
+					this.ws = new WebSocket(wsUrl)
+	
+					this.ws.on('open', () => {
+						this.onOpen()
+						resolve()
+					})
+	
+					this.ws.on('message', (data: Buffer) => {
+						this.onMessage(data.toString())
+					})
+	
+					this.ws.on('error', error => {
+						this.onError(error)
+						if (this.connectionState === 'connecting') {
+							reject(new Error('Failed to connect to WebSocket'))
+						}
+					})
+	
+					this.ws.on('close', () => {
+						void this.onClose()
+					})
+
+				} catch {
+					this.connectionState = 'disconnected'
+					reject(new Error('Failed to connect to WebSocket'))
+				}
+			})
 		}
-
-		return new Promise((resolve, reject) => {
-			try {
-				this.connectionState = 'connecting'
-				const wsUrl = `${this.url}?token=${encodeURIComponent(this.token)}`
-				this.ws = new WebSocket(wsUrl)
-
-				this.ws.on('open', () => {
-					this.onOpen()
-					resolve()
-				})
-
-				this.ws.on('message', (data: Buffer) => {
-					this.onMessage(data.toString())
-				})
-
-				this.ws.on('error', error => {
-					this.onError(error)
-					if (this.connectionState === 'connecting') {
-						reject(new Error('Failed to connect to WebSocket'))
-					}
-				})
-
-				this.ws.on('close', () => {
-					void this.onClose()
-				})
-			} catch {
-				this.connectionState = 'disconnected'
-				reject(new Error('Failed to connect to WebSocket'))
-			}
-		})
 	}
 
 	async send( { 
@@ -120,7 +114,7 @@ export class SandboxWebSocket {
 		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
 
 		const existing = this.waitQueueToEventTypePromiseMapping.get(eventType)
-		if (existing) {
+		if (existing != null) {
 			existing.reject?.(new Error('Replaced by new wait'))
 		}
 
@@ -166,7 +160,7 @@ export class SandboxWebSocket {
 	 * Matches frontend behavior - sends HealthPing every 30s
 	 */
 	private startHealthPing(): void {
-		if (this.healthPingTimeoutId) {
+		if (this.healthPingTimeoutId != null) {
 			clearTimeout(this.healthPingTimeoutId)
 			this.healthPingTimeoutId = null
 		}
@@ -190,7 +184,7 @@ export class SandboxWebSocket {
 		const { messageId, payload } = message
 
 		const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId)
-		if (pendingMessage) {
+		if (pendingMessage != null) {
 			clearTimeout(pendingMessage.timeoutId)
 			pendingMessage.deferredPromise.resolve?.(payload)
 			this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
@@ -198,7 +192,7 @@ export class SandboxWebSocket {
 		}
 
 		const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType)
-		if (eventWaiter) {
+		if (eventWaiter != null) {
 			eventWaiter.resolve?.(payload)
 			this.waitQueueToEventTypePromiseMapping.delete(payload.eventType)
 			return
@@ -242,7 +236,7 @@ export class SandboxWebSocket {
 		message: string
 		shouldThrowOnError: boolean
 	}): void {
-		if (this.connectionState !== 'connected' || !this.ws) {
+		if (this.connectionState !== 'connected' || this.ws == null) {
 			this.messagesData.push(message)
 			return
 		}
@@ -251,12 +245,11 @@ export class SandboxWebSocket {
 			this.ws.send(message)
 		} catch (error) {
 			this.messagesData.push(message)
-			if (shouldThrowOnError) throw error
 		}
 	}
 
 	private cleanDirtyWebSocketIfPresent(): void {
-		if (this.ws) {
+		if (this.ws != null) {
 			this.ws.removeAllListeners()
 			if (this.ws.readyState === WebSocket.OPEN) {
 				this.ws.close()
@@ -264,7 +257,7 @@ export class SandboxWebSocket {
 			this.ws = null
 		}
 
-		if (this.healthPingTimeoutId) {
+		if (this.healthPingTimeoutId != null) {
 			clearTimeout(this.healthPingTimeoutId)
 			this.healthPingTimeoutId = null
 		}

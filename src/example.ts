@@ -33,8 +33,7 @@ async function main() {
 		})
 		console.log('Echo result:', {
 			stdout: echoResult.stdout.trim(),
-			stderr: echoResult.stderr,
-			exitCode: echoResult.exitCode
+			stderr: echoResult.stderr,	
 		})
 
 		// Test 2: runSmallCommand - Check current directory
@@ -44,7 +43,6 @@ async function main() {
 		})
 		console.log('Current directory:', {
 			stdout: pwdResult.stdout.trim(),
-			exitCode: pwdResult.exitCode
 		})
 
 		// Test 3: runSmallCommand - List files
@@ -55,7 +53,6 @@ async function main() {
 		})
 		console.log('Files in /home/damner/code:', {
 			lines: lsResult.stdout.split('\n').length,
-			exitCode: lsResult.exitCode
 		})
 
 		// Test 4: runStreamingCommand - Echo with callbacks
@@ -150,7 +147,6 @@ console.log('Current time:', new Date().toISOString())`
 		})
 		console.log('Node.js output:', {
 			stdout: nodeResult.stdout,
-			exitCode: nodeResult.exitCode
 		})
 
 		// Keep the sandbox alive for testing

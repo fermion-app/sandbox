@@ -105,10 +105,7 @@ export class Sandbox {
 		if (this.containerDetails != null) {
 			const url = new URL(`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`)
 			url.searchParams.append('full-path', path)
-			url.searchParams.append(
-				'playground-container-access-token',
-				this.containerDetails.playgroundContainerAccessToken
-			)
+			url.searchParams.append('playground-container-access-token', this.containerDetails.playgroundContainerAccessToken)
 
 			const response = await fetch(url)
 	
@@ -121,9 +118,9 @@ export class Sandbox {
 	
 			const content = await response.text()
 			return content
+		} else {
+			throw new Error('No container found')
 		}
-
-		throw new Error('No container found')
 	}
 
 	async setFile(path: string, content: string): Promise<void> {
@@ -194,7 +191,7 @@ export class Sandbox {
 							}
 
 						} else if (eventDetails.type === 'close') {
-							const exitCode = eventDetails.code ?? 0
+							const exitCode = eventDetails.code ?? 0 // TODO: check exit code - backend is sending null as fallback
 
 							if (eventDetails.error != null) {
 								throw new Error(eventDetails.error)
@@ -216,11 +213,9 @@ export class Sandbox {
 	async runCommand(options: {
 		cmd: string
 		args?: string[]
-		stdin?: string
 	}): Promise<{
 		stdout: string
 		stderr: string
-		exitCode?: number
 	}> {
 		if (this.ws != null) {
 			const fullCommand = options.args
