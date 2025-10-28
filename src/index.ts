@@ -10,8 +10,6 @@ export interface SandboxConfig {
 	timeoutMs: number
 	apiKey?: string
 }
-
-export type { ContainerDetails } from './api-client.js'
 export class Sandbox {
 	private config: SandboxConfig
 	private authToken: string
@@ -27,7 +25,7 @@ export class Sandbox {
 		this.fermionSchoolId = process.env.FERMION_SCHOOL_ID ?? ''
 		this.baseUrl = process.env.BASE_URL ?? ''
 		this.config = {
-			timeoutMs: config.timeoutMs ?? 120000,
+			timeoutMs: config.timeoutMs ?? 120000, // TODO: check timeout
 			gitRepoUrl: config.gitRepoUrl ?? 'https://github.com/mehulmpt/empty'
 		}
 	}
@@ -94,10 +92,7 @@ export class Sandbox {
 			this.ws = new SandboxWebSocket(wsUrl, this.containerDetails.playgroundContainerAccessToken)
 			await this.ws.connect()
 
-			await this.ws.waitForNextFutureWebSocketEvent('ContainerServerReady', 10000)
-
-		} else {
-			throw new Error('No container found')
+			await this.ws.waitForNextFutureWebSocketEvent('ContainerServerReady', 10000) // TODO: check timeout
 		}
 	}
 
@@ -145,7 +140,7 @@ export class Sandbox {
 				}
 			})
 
-			if (!response.ok && response.status !== 201) {
+			if (!response.ok) {
 				throw new Error(`Failed to set file: ${response.statusText}`)
 			}
 		} else {
@@ -155,59 +150,66 @@ export class Sandbox {
 
 	async runStreamingCommand(options: {
 		cmd: string
-		args?: string[]
+		args: string[]
 		stdin?: string
 		onStdout?: (stdout: string) => void
 		onStderr?: (stderr: string) => void
 		onClose?: (exitCode: number) => void
 	}): Promise<void> {
-		if (this.ws == null) {
+		if (this.ws != null) {
+			const data: Record<string, string | string[]> = { command: options.cmd }
+			data.args = options.args
+			if (options.stdin != null) {
+				data.stdin = options.stdin
+			}
+
+			const startResponse = await this.ws.send({
+				payload: {
+					eventType: 'RunLongRunningCommand',
+					data: {
+						command: options.cmd,
+						args: options.args,
+						stdin: options.stdin
+					}
+				}
+			}) 
+
+			if (startResponse.eventType === 'RunLongRunningCommand') {
+				const { uniqueTaskId } = startResponse.data
+
+				while (this.ws.isConnected()) {
+					const payload = await this.ws.waitForNextFutureWebSocketEvent('StreamLongRunningTaskEvent', 300000) // TODO: check timeout
+
+					if (payload.eventType === 'StreamLongRunningTaskEvent') {
+						if (payload.uniqueTaskId !== uniqueTaskId) continue
+
+						const eventDetails = payload.eventDetails
+
+						if (eventDetails.type === 'io') {	
+							if (eventDetails.stdout != null) {
+								options.onStdout?.(eventDetails.stdout)
+							}
+							if (eventDetails.stderr != null) {
+								options.onStderr?.(eventDetails.stderr)
+							}
+
+						} else if (eventDetails.type === 'close') {
+							const exitCode = eventDetails.code ?? 0
+
+							if (eventDetails.error != null) {
+								throw new Error(eventDetails.error)
+							}
+							options.onClose?.(exitCode)
+							
+							return
+						}
+					}
+				}
+			} else {
+				throw new Error('Unexpected response event type')
+			}
+		} else {
 			throw new Error('Not connected')
-		}
-
-		const startResponse = await this.ws.send<{
-			data: { uniqueTaskId: string; processId: number }
-		}>('RunLongRunningCommand', {
-			data: {
-				command: options.cmd,
-				...(options.args != null && { args: options.args }),
-				...(options.stdin != null && { stdin: options.stdin })
-			}
-		}) 
-
-		const { uniqueTaskId } = startResponse.data
-
-		while (this.ws.isConnected()) {
-			const payload = await this.ws.waitForNextFutureWebSocketEvent('StreamLongRunningTaskEvent',300000)
-
-			if (payload.uniqueTaskId !== uniqueTaskId) continue
-
-			const eventDetails = payload.eventDetails as {
-				type: 'io' | 'close'
-				stdout?: string
-				stderr?: string
-				code?: number | null
-				error?: string | null
-			}
-
-			if (eventDetails.type === 'io') {
-				if (eventDetails.stdout != null) {
-					options.onStdout?.(eventDetails.stdout)
-				}
-				if (eventDetails.stderr != null) {
-					options.onStderr?.(eventDetails.stderr)
-				}
-			} else if (eventDetails.type === 'close') {
-				const exitCode = eventDetails.code ?? 0
-
-				if (eventDetails.error != null) {
-					throw new Error(eventDetails.error)
-				}
-
-				options.onClose?.(exitCode)
-
-				return
-			}
 		}
 	}
 
@@ -220,26 +222,28 @@ export class Sandbox {
 		stderr: string
 		exitCode?: number
 	}> {
-		if (!this.ws) {
-			throw new Error('Not connected')
-		}
-
-		const fullCommand = options.args
+		if (this.ws != null) {
+			const fullCommand = options.args
 			? `${options.cmd} ${options.args.join(' ')}`
 			: options.cmd
 
-		const response = await this.ws.send<{
-			stdout: string
-			stderr: string
-			exitCode?: number
-		}>('EvalSmallCodeSnippetInsideContainer', {
-			command: fullCommand
-		})
+			const response = await this.ws.send({ 
+				payload: { 
+					eventType: 'EvalSmallCodeSnippetInsideContainer', 
+					command: fullCommand 
+				}
+			})
 
-		return {
-			stdout: response.stdout,
-			stderr: response.stderr,
-			exitCode: response.exitCode
+			if (response.eventType === 'EvalSmallCodeSnippetInsideContainer') {
+				return {
+					stdout: response.stdout,
+					stderr: response.stderr
+				}
+			} else {
+				throw new Error('Unexpected response event type')
+			}
+		} else {
+			throw new Error('Not connected')
 		}
 	}
 

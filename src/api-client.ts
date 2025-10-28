@@ -155,7 +155,7 @@ export class ApiClient {
 
 		if (apiResponse.output.status === 'error') {
 			const errorMessage = apiResponse.output.errorMessage
-			throw new Error(`API error for ${functionName}: ${errorMessage}`)
+			throw new Error(`API error: ${errorMessage}`)
 		}
 
 		return apiResponse.output.data

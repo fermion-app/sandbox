@@ -1,5 +1,6 @@
 import WebSocket from 'ws'
 import { nanoid } from 'nanoid'
+import { WebSocketRequestPayload, WebSocketResponsePayload } from './constants.js'
 
 class DeferredPromise<T> {
 	promise: Promise<T>
@@ -14,18 +15,6 @@ class DeferredPromise<T> {
 			this.resolve = resolve
 		})
 	}
-}
-
-export interface WebSocketRequestPayload {
-	eventType: string
-	[key: string]: unknown
-}
-
-export interface WebSocketResponsePayload {
-	eventType: string
-	status?: 'ok' | 'error'
-	error?: string
-	[key: string]: unknown
 }
 
 export interface WebSocketMessage {
@@ -90,28 +79,28 @@ export class SandboxWebSocket {
 				this.ws.on('close', () => {
 					void this.onClose()
 				})
-			} catch (error) {
+			} catch {
 				this.connectionState = 'disconnected'
 				reject(new Error('Failed to connect to WebSocket'))
 			}
 		})
 	}
 
-	async send<T = WebSocketResponsePayload>(
-		eventType: string,
-		data?: Record<string, unknown>,
-		options?: { timeout?: number }
-	): Promise<T> {
-		const timeout = options?.timeout ?? 30000
-
-		const payload = { eventType, ...data }
+	async send( { 
+		payload, 
+		options = { timeout: 30000 } // TODO: check timeout
+	}: { 
+		payload: WebSocketRequestPayload, 
+		options?: { timeout?: number } 
+	}
+	): Promise<WebSocketResponsePayload> {
+		const timeout = options.timeout
 		const { messageId, rawMessage } = this.constructRawWebSocketMessage(payload)
-
 		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
 
 		const timeoutId = setTimeout(() => {
 			this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
-			deferredPromise.reject?.(new Error(`Request timeout for ${eventType}`))
+			deferredPromise.reject?.(new Error(`Request timeout for ${payload.eventType}`))
 		}, timeout)
 
 		this.messageIdToWebSocketResponsePromiseMapping.set(messageId, {
@@ -121,17 +110,12 @@ export class SandboxWebSocket {
 
 		this.sendSingleMessageUnsafe({ message: rawMessage, shouldThrowOnError: false })
 
-		return deferredPromise.promise.then((payload: WebSocketResponsePayload) => {
-			if (payload.status === 'error') {
-				throw new Error(payload.error)
-			}
-			return payload as T
-		})
+		return deferredPromise.promise
 	}
 
 	waitForNextFutureWebSocketEvent(
 		eventType: string,
-		timeout = 30000
+		timeout = 30000 // TODO: check timeout
 	): Promise<WebSocketResponsePayload> {
 		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
 
@@ -189,15 +173,15 @@ export class SandboxWebSocket {
 
 		const sendHealthPing = (): void => {
 			if (this.connectionState === 'connected') {
-				this.send('HealthPing', {}).catch(error => {
+				this.send({ payload: { eventType: 'HealthPing' } }).catch(error => {
 					console.error('[SandboxWebSocket] Health ping failed', error)
 				})
 
-				this.healthPingTimeoutId = setTimeout(sendHealthPing, 30000)
+				this.healthPingTimeoutId = setTimeout(sendHealthPing, 30000) // TODO: check timeout
 			}
 		}
 
-		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000)
+		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000) // TODO: check timeout
 	}
 
 	private onMessage(rawData: string): void {
@@ -230,7 +214,7 @@ export class SandboxWebSocket {
 		this.cleanDirtyWebSocketIfPresent()
 
 		if (this.shouldAutoReconnect) {
-			await new Promise(resolve => setTimeout(resolve, 2000))
+			await new Promise(resolve => setTimeout(resolve, 2000)) // TODO: check timeout
 			try {
 				await this.connect()
 			} catch (error) {
