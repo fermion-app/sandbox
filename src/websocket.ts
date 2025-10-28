@@ -1,278 +1,296 @@
-import WebSocket from 'ws'
-import { nanoid } from 'nanoid'
-import { WebSocketRequestPayload, WebSocketResponsePayload } from './constants.js'
+import WebSocket from "ws";
+import { nanoid } from "nanoid";
+import { WebSocketRequestPayload, WebSocketResponsePayload } from "./constants";
 
 class DeferredPromise<T> {
-	promise: Promise<T>
-	reject: null | ((reason?: unknown) => void)
-	resolve: null | ((value: T) => void)
+  promise: Promise<T>;
+  reject: null | ((reason?: unknown) => void);
+  resolve: null | ((value: T) => void);
 
-	constructor() {
-		this.reject = null
-		this.resolve = null
-		this.promise = new Promise((resolve, reject) => {
-			this.reject = reject
-			this.resolve = resolve
-		})
-	}
+  constructor() {
+    this.reject = null;
+    this.resolve = null;
+    this.promise = new Promise((resolve, reject) => {
+      this.reject = reject;
+      this.resolve = resolve;
+    });
+  }
 }
 
 export interface WebSocketMessage {
-	messageId: string
-	payload: WebSocketRequestPayload
+  messageId: string;
+  payload: WebSocketRequestPayload;
 }
 
 export class SandboxWebSocket {
-	private ws: WebSocket | null = null
-	private url: string
-	private token: string
-	private messageIdToWebSocketResponsePromiseMapping = new Map<
-		string,
-		{ deferredPromise: DeferredPromise<WebSocketResponsePayload>; timeoutId: NodeJS.Timeout }
-	>()
-	private waitQueueToEventTypePromiseMapping = new Map<
-		string,
-		DeferredPromise<WebSocketResponsePayload>
-	>()
-	private messagesData: string[] = []
-	private connectionState: 'disconnected' | 'connecting' | 'connected' = 'disconnected'
-	private shouldAutoReconnect = true
-	private healthPingTimeoutId: NodeJS.Timeout | null = null
+  private ws: WebSocket | null = null;
+  private url: string;
+  private token: string;
+  private messageIdToWebSocketResponsePromiseMapping = new Map<
+    string,
+    {
+      deferredPromise: DeferredPromise<WebSocketResponsePayload>;
+      timeoutId: NodeJS.Timeout;
+    }
+  >();
+  private waitQueueToEventTypePromiseMapping = new Map<
+    string,
+    {
+      deferredPromise: DeferredPromise<WebSocketResponsePayload>;
+      timeoutId: NodeJS.Timeout;
+    }
+  >();
+  private messagesData: string[] = [];
+  private connectionState: "disconnected" | "connecting" | "connected" =
+    "disconnected";
+  private shouldAutoReconnect = true;
+  private healthPingTimeoutId: NodeJS.Timeout | null = null;
 
-	constructor(url: string, token: string) {
-		this.url = url
-		this.token = token
-	}
+  constructor(url: string, token: string) {
+    this.url = url;
+    this.token = token;
+  }
 
-	async connect(): Promise<void> {
-		if (this.connectionState !== 'connected') {
-			return new Promise((resolve, reject) => {
-				try {
-					this.connectionState = 'connecting'
-					const wsUrl = `${this.url}?token=${encodeURIComponent(this.token)}`
-					this.ws = new WebSocket(wsUrl)
-	
-					this.ws.on('open', () => {
-						this.onOpen()
-						resolve()
-					})
-	
-					this.ws.on('message', (data: Buffer) => {
-						this.onMessage(data.toString())
-					})
-	
-					this.ws.on('error', error => {
-						this.onError(error)
-						if (this.connectionState === 'connecting') {
-							reject(new Error('Failed to connect to WebSocket'))
-						}
-					})
-	
-					this.ws.on('close', () => {
-						void this.onClose()
-					})
+  async connect(): Promise<void> {
+    if (this.connectionState !== "connected") {
+      return new Promise((resolve, reject) => {
+        try {
+          this.connectionState = "connecting";
+          const wsUrl = `${this.url}?token=${encodeURIComponent(this.token)}`;
+          this.ws = new WebSocket(wsUrl);
 
-				} catch {
-					this.connectionState = 'disconnected'
-					reject(new Error('Failed to connect to WebSocket'))
-				}
-			})
-		}
-	}
+          this.ws.on("open", () => {
+            this.onOpen();
+            resolve();
+          });
 
-	async send( { 
-		payload, 
-		options = { timeout: 30000 } // TODO: check timeout
-	}: { 
-		payload: WebSocketRequestPayload, 
-		options?: { timeout?: number } 
-	}
-	): Promise<WebSocketResponsePayload> {
-		const timeout = options.timeout
-		const { messageId, rawMessage } = this.constructRawWebSocketMessage(payload)
-		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
+          this.ws.on("message", (data: Buffer) => {
+            this.onMessage(data.toString());
+          });
 
-		const timeoutId = setTimeout(() => {
-			this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
-			deferredPromise.reject?.(new Error(`Request timeout for ${payload.eventType}`))
-		}, timeout)
+          this.ws.on("error", (error) => {
+            this.onError(error);
+            if (this.connectionState === "connecting") {
+              reject(new Error("Failed to connect to WebSocket"));
+            }
+          });
 
-		this.messageIdToWebSocketResponsePromiseMapping.set(messageId, {
-			deferredPromise,
-			timeoutId
-		})
+          this.ws.on("close", () => {
+            void this.onClose();
+          });
+        } catch {
+          this.connectionState = "disconnected";
+          reject(new Error("Failed to connect to WebSocket"));
+        }
+      });
+    }
+  }
 
-		this.sendSingleMessageUnsafe({ message: rawMessage, shouldThrowOnError: false })
+  async send({
+    payload,
+    options = { timeout: 30000 }, // TODO: check timeout
+  }: {
+    payload: WebSocketRequestPayload;
+    options?: { timeout?: number };
+  }): Promise<WebSocketResponsePayload> {
+    const timeout = options.timeout;
+    const { messageId, rawMessage } =
+      this.constructRawWebSocketMessage(payload);
+    const deferredPromise = new DeferredPromise<WebSocketResponsePayload>();
 
-		return deferredPromise.promise
-	}
+    const timeoutId = setTimeout(() => {
+      this.messageIdToWebSocketResponsePromiseMapping.delete(messageId);
+      deferredPromise.reject?.(
+        new Error(`Request timeout for ${payload.eventType}`)
+      );
+    }, timeout);
 
-	waitForNextFutureWebSocketEvent(
-		eventType: string,
-		timeout = 30000 // TODO: check timeout
-	): Promise<WebSocketResponsePayload> {
-		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
+    this.messageIdToWebSocketResponsePromiseMapping.set(messageId, {
+      deferredPromise,
+      timeoutId,
+    });
 
-		const existing = this.waitQueueToEventTypePromiseMapping.get(eventType)
-		if (existing != null) {
-			existing.reject?.(new Error('Replaced by new wait'))
-		}
+    this.sendSingleMessageUnsafe({
+      message: rawMessage,
+      shouldThrowOnError: false,
+    });
 
-		this.waitQueueToEventTypePromiseMapping.set(eventType, deferredPromise)
+    return deferredPromise.promise;
+  }
 
-		setTimeout(() => {
-			const waiter = this.waitQueueToEventTypePromiseMapping.get(eventType)
-			if (waiter === deferredPromise) {
-				this.waitQueueToEventTypePromiseMapping.delete(eventType)
-				deferredPromise.reject?.(new Error(`Timeout waiting for event: ${eventType}`))
-			}
-		}, timeout)
+  waitForNextFutureWebSocketEvent(
+    { 
+			eventType, 
+			timeout = 30000 
+		}: { 
+			eventType: string; 
+			timeout?: number 
+		} // TODO: check timeout
+  ): Promise<WebSocketResponsePayload> {
+    const deferredPromise = new DeferredPromise<WebSocketResponsePayload>();
 
-		return deferredPromise.promise
-	}
+    const existing = this.waitQueueToEventTypePromiseMapping.get(eventType);
+    if (existing != null) {
+      existing.deferredPromise.reject?.(new Error("Replaced by new wait"));
+    }
 
-	disconnect(): void {
-		this.shouldAutoReconnect = false
-		this.cleanDirtyWebSocketIfPresent()
-	}
+    this.waitQueueToEventTypePromiseMapping.set(eventType, {
+      deferredPromise,
+      timeoutId: setTimeout(() => {
+        this.waitQueueToEventTypePromiseMapping.delete(eventType);
+        deferredPromise.reject?.(
+          new Error(`Timeout waiting for event: ${eventType}`)
+        );
+      }, timeout),
+    });
 
-	isConnected(): boolean {
-		return this.connectionState === 'connected'
-	}
+    return deferredPromise.promise;
+  }
 
-	private onOpen(): void {
-		this.connectionState = 'connected'
+  disconnect(): void {
+    this.shouldAutoReconnect = false;
+    this.cleanDirtyWebSocketIfPresent();
+  }
 
-		const queue = [...this.messagesData]
-		this.messagesData = []
+  isConnected(): boolean {
+    return this.connectionState === "connected";
+  }
 
-		if (queue.length > 0) {
-			for (const message of queue) {
-				this.sendSingleMessageUnsafe({ message, shouldThrowOnError: false })
-			}
-		}
+  private onOpen(): void {
+    this.connectionState = "connected";
 
-		this.startHealthPing()
-	}
+    const queue = [...this.messagesData];
+    this.messagesData = [];
 
-	/**
-	 * Sends periodic health pings to keep the connection alive
-	 * Matches frontend behavior - sends HealthPing every 30s
-	 */
-	private startHealthPing(): void {
-		if (this.healthPingTimeoutId != null) {
-			clearTimeout(this.healthPingTimeoutId)
-			this.healthPingTimeoutId = null
-		}
+    if (queue.length > 0) {
+      for (const message of queue) {
+        this.sendSingleMessageUnsafe({ message, shouldThrowOnError: false });
+      }
+    }
 
-		const sendHealthPing = (): void => {
-			if (this.connectionState === 'connected') {
-				this.send({ payload: { eventType: 'HealthPing' } }).catch(error => {
-					console.error('[SandboxWebSocket] Health ping failed', error)
-				})
+    this.startHealthPing();
+  }
 
-				this.healthPingTimeoutId = setTimeout(sendHealthPing, 30000) // TODO: check timeout
-			}
-		}
+  /**
+   * Sends periodic health pings to keep the connection alive
+   * Matches frontend behavior - sends HealthPing every 30s
+   */
+  private startHealthPing(): void {
+    if (this.healthPingTimeoutId != null) {
+      clearTimeout(this.healthPingTimeoutId);
+      this.healthPingTimeoutId = null;
+    }
 
-		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000) // TODO: check timeout
-	}
+    const sendHealthPing = (): void => {
+      if (this.connectionState === "connected") {
+        this.send({ payload: { eventType: "HealthPing" } }).catch((error) => {
+          console.error("[SandboxWebSocket] Health ping failed", error);
+        });
 
-	private onMessage(rawData: string): void {
-		const message = JSON.parse(rawData)
+        this.healthPingTimeoutId = setTimeout(sendHealthPing, 30000); // TODO: check timeout
+      }
+    };
 
-		const { messageId, payload } = message
+    this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000); // TODO: check timeout
+  }
 
-		const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId)
-		if (pendingMessage != null) {
-			clearTimeout(pendingMessage.timeoutId)
-			pendingMessage.deferredPromise.resolve?.(payload)
-			this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
-			return
-		}
+  private onMessage(rawData: string): void {
+    const message = JSON.parse(rawData);
 
-		const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType)
-		if (eventWaiter != null) {
-			eventWaiter.resolve?.(payload)
-			this.waitQueueToEventTypePromiseMapping.delete(payload.eventType)
-			return
-		}
-	}
+    const { messageId, payload } = message;
 
-	private onError(error: Error): void {
-		console.error('[SandboxWebSocket] WebSocket error', error)
-	}
+    const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId);
+    if (pendingMessage != null) {
+      clearTimeout(pendingMessage.timeoutId);
+      pendingMessage.deferredPromise.resolve?.(payload);
+      this.messageIdToWebSocketResponsePromiseMapping.delete(messageId);
+      return;
+    }
 
-	private async onClose(): Promise<void> {
-		this.connectionState = 'disconnected'
-		this.cleanDirtyWebSocketIfPresent()
+    const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType);
+    if (eventWaiter != null) {
+      clearTimeout(eventWaiter.timeoutId);
+      eventWaiter.deferredPromise.resolve?.(payload);
+      this.waitQueueToEventTypePromiseMapping.delete(payload.eventType);
+      return;
+    }
+  }
 
-		if (this.shouldAutoReconnect) {
-			await new Promise(resolve => setTimeout(resolve, 2000)) // TODO: check timeout
-			try {
-				await this.connect()
-			} catch (error) {
-				console.error('[SandboxWebSocket] Reconnect failed', error)
-			}
-		}
-	}
+  private onError(error: Error): void {
+    console.error("[SandboxWebSocket] WebSocket error", error);
+  }
 
-	private constructRawWebSocketMessage(payload: WebSocketRequestPayload): {
-		messageId: string
-		rawMessage: string
-	} {
-		const messageId = nanoid()
-		const message: WebSocketMessage = { messageId, payload }
-		return {
-			messageId,
-			rawMessage: JSON.stringify(message)
-		}
-	}
+  private async onClose(): Promise<void> {
+    this.connectionState = "disconnected";
+    this.cleanDirtyWebSocketIfPresent();
 
-	private sendSingleMessageUnsafe({
-		message,
-		shouldThrowOnError
-	}: {
-		message: string
-		shouldThrowOnError: boolean
-	}): void {
-		if (this.connectionState !== 'connected' || this.ws == null) {
-			this.messagesData.push(message)
-			return
-		}
+    if (this.shouldAutoReconnect) {
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // TODO: check timeout
+      try {
+        await this.connect();
+      } catch (error) {
+        console.error("[SandboxWebSocket] Reconnect failed", error);
+      }
+    }
+  }
 
-		try {
-			this.ws.send(message)
-		} catch (error) {
-			this.messagesData.push(message)
-		}
-	}
+  private constructRawWebSocketMessage(payload: WebSocketRequestPayload): {
+    messageId: string;
+    rawMessage: string;
+  } {
+    const messageId = nanoid();
+    const message: WebSocketMessage = { messageId, payload };
+    return {
+      messageId,
+      rawMessage: JSON.stringify(message),
+    };
+  }
 
-	private cleanDirtyWebSocketIfPresent(): void {
-		if (this.ws != null) {
-			this.ws.removeAllListeners()
-			if (this.ws.readyState === WebSocket.OPEN) {
-				this.ws.close()
-			}
-			this.ws = null
-		}
+  private sendSingleMessageUnsafe({
+    message,
+    shouldThrowOnError,
+  }: {
+    message: string;
+    shouldThrowOnError: boolean;
+  }): void {
+    if (this.connectionState !== "connected" || this.ws == null) {
+      this.messagesData.push(message);
+      return;
+    }
 
-		if (this.healthPingTimeoutId != null) {
-			clearTimeout(this.healthPingTimeoutId)
-			this.healthPingTimeoutId = null
-		}
+    try {
+      this.ws.send(message);
+    } catch (error) {
+      this.messagesData.push(message);
+    }
+  }
 
-		this.messageIdToWebSocketResponsePromiseMapping.forEach(pending => {
-			clearTimeout(pending.timeoutId)
-			pending.deferredPromise.reject?.(new Error('WebSocket closed'))
-		})
-		this.messageIdToWebSocketResponsePromiseMapping.clear()
+  private cleanDirtyWebSocketIfPresent(): void {
+    if (this.ws != null) {
+      this.ws.removeAllListeners();
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.close();
+      }
+      this.ws = null;
+    }
 
-		this.waitQueueToEventTypePromiseMapping.forEach(waiter => {
-			waiter.reject?.(new Error('WebSocket closed'))
-		})
-		this.waitQueueToEventTypePromiseMapping.clear()
+    if (this.healthPingTimeoutId != null) {
+      clearTimeout(this.healthPingTimeoutId);
+      this.healthPingTimeoutId = null;
+    }
 
-		this.messagesData = []
-	}
+    this.messageIdToWebSocketResponsePromiseMapping.forEach((pending) => {
+      clearTimeout(pending.timeoutId);
+      pending.deferredPromise.reject?.(new Error("WebSocket closed"));
+    });
+    this.messageIdToWebSocketResponsePromiseMapping.clear();
+
+    this.waitQueueToEventTypePromiseMapping.forEach((waiter) => {
+      clearTimeout(waiter.timeoutId);
+      waiter.deferredPromise.reject?.(new Error("WebSocket closed"));
+    });
+    this.waitQueueToEventTypePromiseMapping.clear();
+
+    this.messagesData = [];
+  }
 }
