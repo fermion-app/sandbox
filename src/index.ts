@@ -12,7 +12,7 @@ export interface SandboxConfig {
 
 function exhaustiveGuard(_value: never): never {
   throw new Error(
-    `ERROR! Reached forbidden guard function with unexpected value: ${JSON.stringify(_value)}`
+    `ERROR! Reached forbidden guard function with unexpected value: ${JSON.stringify(_value)}`,
   );
 }
 export class Sandbox {
@@ -22,13 +22,13 @@ export class Sandbox {
   private playgroundSessionId: string | null = null;
   private playgroundSnippetId: string | null = null;
   private containerDetails: ContainerDetails | null = null;
-	private timeout: number;
+  private timeout: number;
   private ws: SandboxWebSocket | null = null;
 
   private constructor(config: SandboxConfig) {
     this.authToken = process.env.AUTH_TOKEN ?? "";
     this.fermionSchoolId = process.env.FERMION_SCHOOL_ID ?? "";
-		this.timeout = 30000; // TODO: check timeout
+    this.timeout = 30000; // TODO: check timeout
     this.config = {
       gitRepoUrl: config.gitRepoUrl ?? "https://github.com/mehulmpt/empty",
     };
@@ -37,9 +37,9 @@ export class Sandbox {
   static async create(config: SandboxConfig): Promise<Sandbox> {
     const sandbox = new Sandbox(config);
     const api = new ApiClient({
-			fermionSchoolId: sandbox.fermionSchoolId,
-			authToken: sandbox.authToken
-		});
+      fermionSchoolId: sandbox.fermionSchoolId,
+      authToken: sandbox.authToken,
+    });
 
     const snippetData = await api.createPlaygroundSnippet({
       title: nanoid(),
@@ -102,7 +102,7 @@ export class Sandbox {
 
       this.ws = new SandboxWebSocket(
         wsUrl,
-        this.containerDetails.playgroundContainerAccessToken
+        this.containerDetails.playgroundContainerAccessToken,
       );
       await this.ws.connect();
 
@@ -121,12 +121,12 @@ export class Sandbox {
   async getFile(path: string): Promise<ArrayBuffer> {
     if (this.containerDetails != null) {
       const url = new URL(
-        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
+        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`,
       );
       url.searchParams.append("full-path", path);
       url.searchParams.append(
         "playground-container-access-token",
-        this.containerDetails.playgroundContainerAccessToken
+        this.containerDetails.playgroundContainerAccessToken,
       );
 
       const response = await fetch(url);
@@ -154,12 +154,12 @@ export class Sandbox {
   }): Promise<void> {
     if (this.containerDetails != null) {
       const url = new URL(
-        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
+        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`,
       );
       url.searchParams.append("full-path", path);
       url.searchParams.append(
         "playground-container-access-token",
-        this.containerDetails.playgroundContainerAccessToken
+        this.containerDetails.playgroundContainerAccessToken,
       );
 
       const response = await fetch(url, {

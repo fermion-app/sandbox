@@ -101,7 +101,7 @@ export class SandboxWebSocket {
     const timeoutId = setTimeout(() => {
       this.messageIdToWebSocketResponsePromiseMapping.delete(messageId);
       deferredPromise.reject?.(
-        new Error(`Request timeout for ${payload.eventType}`)
+        new Error(`Request timeout for ${payload.eventType}`),
       );
     }, timeout);
 
@@ -110,22 +110,19 @@ export class SandboxWebSocket {
       timeoutId,
     });
 
-    this.sendSingleMessageUnsafe({
-      message: rawMessage,
-      shouldThrowOnError: false,
-    });
+    this.sendSingleMessage(rawMessage);
 
     return deferredPromise.promise;
   }
 
   waitForNextFutureWebSocketEvent(
-    { 
-			eventType, 
-			timeout = 30000 
-		}: { 
-			eventType: string; 
-			timeout?: number 
-		} // TODO: check timeout
+    {
+      eventType,
+      timeout = 30000,
+    }: {
+      eventType: string;
+      timeout?: number;
+    }, // TODO: check timeout
   ): Promise<WebSocketResponsePayload> {
     const deferredPromise = new DeferredPromise<WebSocketResponsePayload>();
 
@@ -139,7 +136,7 @@ export class SandboxWebSocket {
       timeoutId: setTimeout(() => {
         this.waitQueueToEventTypePromiseMapping.delete(eventType);
         deferredPromise.reject?.(
-          new Error(`Timeout waiting for event: ${eventType}`)
+          new Error(`Timeout waiting for event: ${eventType}`),
         );
       }, timeout),
     });
@@ -164,7 +161,7 @@ export class SandboxWebSocket {
 
     if (queue.length > 0) {
       for (const message of queue) {
-        this.sendSingleMessageUnsafe({ message, shouldThrowOnError: false });
+        this.sendSingleMessage(message);
       }
     }
 
@@ -199,7 +196,8 @@ export class SandboxWebSocket {
 
     const { messageId, payload } = message;
 
-    const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId);
+    const pendingMessage =
+      this.messageIdToWebSocketResponsePromiseMapping.get(messageId);
     if (pendingMessage != null) {
       clearTimeout(pendingMessage.timeoutId);
       pendingMessage.deferredPromise.resolve?.(payload);
@@ -207,7 +205,9 @@ export class SandboxWebSocket {
       return;
     }
 
-    const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType);
+    const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(
+      payload.eventType,
+    );
     if (eventWaiter != null) {
       clearTimeout(eventWaiter.timeoutId);
       eventWaiter.deferredPromise.resolve?.(payload);
@@ -246,13 +246,7 @@ export class SandboxWebSocket {
     };
   }
 
-  private sendSingleMessageUnsafe({
-    message,
-    shouldThrowOnError,
-  }: {
-    message: string;
-    shouldThrowOnError: boolean;
-  }): void {
+  private sendSingleMessage(message: string): void {
     if (this.connectionState !== "connected" || this.ws == null) {
       this.messagesData.push(message);
       return;
@@ -262,6 +256,8 @@ export class SandboxWebSocket {
       this.ws.send(message);
     } catch (error) {
       this.messagesData.push(message);
+      console.error("[SandboxWebSocket] Error sending message", error);
+      // TODO: throw maybe?
     }
   }
 

@@ -129,18 +129,17 @@ export class ApiClient {
     this.authToken = options.authToken;
   }
 
-  private async call<T, D>({ 
-		functionName, 
-		data, 
-		inputSchema, 
-		outputSchema 
-	}: { 
-		functionName: string; 
-		data: D; 
-		inputSchema: z.ZodType<D>; 
-		outputSchema: z.ZodType<T>; 
-	},
-  ): Promise<T> {
+  private async call<T, D>({
+    functionName,
+    data,
+    inputSchema,
+    outputSchema,
+  }: {
+    functionName: string;
+    data: D;
+    inputSchema: z.ZodType<D>;
+    outputSchema: z.ZodType<T>;
+  }): Promise<T> {
     const validatedData = inputSchema.parse(data);
 
     const request = {
@@ -182,33 +181,33 @@ export class ApiClient {
   async createPlaygroundSnippet(
     params: CreatePlaygroundSnippetInput,
   ): Promise<CreatePlaygroundSnippetOutput> {
-    return this.call({ 
-			functionName: "create-new-playground-snippet", 
-			data: params, 
-			inputSchema: createPlaygroundSnippetInputSchema, 
-			outputSchema: createPlaygroundSnippetOutputSchema 
-		});
+    return this.call({
+      functionName: "create-new-playground-snippet",
+      data: params,
+      inputSchema: createPlaygroundSnippetInputSchema,
+      outputSchema: createPlaygroundSnippetOutputSchema,
+    });
   }
 
   async startPlaygroundSession(
     params: StartPlaygroundSessionInput,
   ): Promise<StartPlaygroundSessionOutput> {
-    return this.call({ 
-			functionName: "start-playground-session", 
-			data: params, 
-			inputSchema: startPlaygroundSessionInputSchema, 
-			outputSchema: startPlaygroundSessionOutputSchema 
-		});
+    return this.call({
+      functionName: "start-playground-session",
+      data: params,
+      inputSchema: startPlaygroundSessionInputSchema,
+      outputSchema: startPlaygroundSessionOutputSchema,
+    });
   }
 
   async getRunningPlaygroundSessionDetails(
     params: GetRunningPlaygroundSessionDetailsInput,
   ): Promise<GetRunningPlaygroundSessionDetailsOutput> {
-    return this.call({ 
-			functionName: "get-running-playground-session-details", 
-			data: params, 
-			inputSchema: getRunningPlaygroundSessionDetailsInputSchema, 
-			outputSchema: getRunningPlaygroundSessionDetailsOutputSchema 
-		});
+    return this.call({
+      functionName: "get-running-playground-session-details",
+      data: params,
+      inputSchema: getRunningPlaygroundSessionDetailsInputSchema,
+      outputSchema: getRunningPlaygroundSessionDetailsOutputSchema,
+    });
   }
 }

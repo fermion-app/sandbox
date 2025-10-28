@@ -72,7 +72,7 @@ async function main() {
 
     // Test 5: runStreamingCommand - Long running command with multiple outputs
     console.log(
-      "\n--- Test 5: runStreamingCommand (long running with streaming) ---"
+      "\n--- Test 5: runStreamingCommand (long running with streaming) ---",
     );
     await sandbox.runStreamingCommand({
       cmd: "sh",
@@ -93,7 +93,7 @@ async function main() {
 
     // Test 6: runStreamingCommand - Real-time command output (npm install simulation)
     console.log(
-      "\n--- Test 6: runStreamingCommand (simulating package manager) ---"
+      "\n--- Test 6: runStreamingCommand (simulating package manager) ---",
     );
     await sandbox.runStreamingCommand({
       cmd: "sh",

@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "build": "tsx src/build.ts",
-    "dev": "tsx src/example.ts",
+    "test": "tsx src/example.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "pretty": "prettier --write \"**/*.{ts,tsx,json,yml,yaml}\" --log-level warn"
