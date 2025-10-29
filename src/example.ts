@@ -14,7 +14,7 @@ async function main() {
     // Create a new sandbox instance
     // Snippet will be auto-created with a random name
     const sandbox = await Sandbox.create({
-      gitRepoUrl: "https://github.com/gautamtayal1/solo",
+      apiKey: process.env.API_KEY ?? "",
     });
 
     console.log("Sandbox created successfully!");

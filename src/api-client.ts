@@ -32,8 +32,8 @@ const startPlaygroundSessionOutputSchema = z.object({
         "can-terminate-and-get-new",
         "can-create-account-and-get-new",
       ]),
-      isVpnFound: z.boolean(),
-      isLimitExceeded: z.boolean(),
+      isVpnFound: z.boolean(), // TODO: check if this is needed
+      isLimitExceeded: z.boolean(), // TODO: check if this is needed
     }),
   ]),
 });
@@ -57,25 +57,19 @@ const getRunningPlaygroundSessionDetailsOutputSchema = z.object({
 });
 
 const createPlaygroundSnippetInputSchema = z.object({
-  title: z.string(),
-  defaultGitRepoUrl: z.string(),
-  isCustom: z.boolean(),
+  source: z.literal("empty"),
+  shouldBackupFilesystem: z.boolean(),
 });
 
 const startPlaygroundSessionInputSchema = z.object({
-  params: z.object({
-    playgroundType: z.literal("PlaygroundSnippet"),
-    playgroundSnippetId: z.string(),
-  }),
+  playgroundSnippetId: z.string(),
 });
 
 const getRunningPlaygroundSessionDetailsInputSchema = z.object({
-  params: z.object({
     playgroundSessionId: z.string(),
     isWaitingForUpscale: z.boolean(),
     playgroundType: z.literal("PlaygroundSnippet"),
     playgroundSnippetId: z.string(),
-  }),
 });
 
 // Export types
@@ -102,31 +96,17 @@ export type GetRunningPlaygroundSessionDetailsOutput = z.infer<
 
 export type ContainerDetails = z.infer<typeof containerDetailsSchema>;
 
-export interface ApiClientOptions {
-  fermionSchoolId: string;
-  authToken: string;
-}
-
 /**
  * API Client for making requests to Fermion backend
  * Handles request validation and error handling
  */
 export class ApiClient {
-  private readonly namespace = "fermion-user";
+  private readonly namespace = "public";
   private readonly baseUrl = "https://backend.codedamn.com/api";
-  private fermionSchoolId: string;
-  private authToken: string;
+  private apiKey: string;
 
-  constructor(options: ApiClientOptions) {
-    if (!options.fermionSchoolId) {
-      throw new Error("Fermion School ID is required");
-    }
-    if (!options.authToken) {
-      throw new Error("Auth token is required");
-    }
-
-    this.fermionSchoolId = options.fermionSchoolId;
-    this.authToken = options.authToken;
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
   }
 
   private async call<T, D>({
@@ -153,8 +133,7 @@ export class ApiClient {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        fermionSchoolId: this.fermionSchoolId,
-        authToken: this.authToken,
+        apiKey: this.apiKey,
         data: [request],
       }),
     });

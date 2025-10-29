@@ -6,8 +6,9 @@ import { ApiClient, type ContainerDetails } from "./api-client";
 dotenv.config();
 
 export interface SandboxConfig {
-  gitRepoUrl: string;
-  apiKey?: string;
+  gitRepoUrl?: string;
+  apiKey: string;
+  shouldBackupFilesystem?: boolean;
 }
 
 function exhaustiveGuard(_value: never): never {
@@ -30,30 +31,25 @@ export class Sandbox {
     this.fermionSchoolId = process.env.FERMION_SCHOOL_ID ?? "";
     this.timeout = 30000; // TODO: check timeout
     this.config = {
-      gitRepoUrl: config.gitRepoUrl ?? "https://github.com/mehulmpt/empty",
+      gitRepoUrl: config.gitRepoUrl,
+      shouldBackupFilesystem: config.shouldBackupFilesystem,
+      apiKey: config.apiKey
     };
   }
 
   static async create(config: SandboxConfig): Promise<Sandbox> {
     const sandbox = new Sandbox(config);
-    const api = new ApiClient({
-      fermionSchoolId: sandbox.fermionSchoolId,
-      authToken: sandbox.authToken,
-    });
+    const api = new ApiClient(sandbox.config.apiKey);
 
     const snippetData = await api.createPlaygroundSnippet({
-      title: nanoid(),
-      defaultGitRepoUrl: sandbox.config.gitRepoUrl,
-      isCustom: true,
+        source: "empty",
+        shouldBackupFilesystem: sandbox.config.shouldBackupFilesystem ?? true
     });
 
     sandbox.playgroundSnippetId = snippetData.playgroundSnippetId;
 
     const sessionData = await api.startPlaygroundSession({
-      params: {
-        playgroundType: "PlaygroundSnippet",
-        playgroundSnippetId: sandbox.playgroundSnippetId,
-      },
+      playgroundSnippetId: sandbox.playgroundSnippetId,
     });
 
     if (sessionData.response.status === "attention-needed") {
@@ -76,17 +72,18 @@ export class Sandbox {
 
     for (let i = 0; i < max; i++) {
       const detailsData = await api.getRunningPlaygroundSessionDetails({
-        params: {
-          playgroundSessionId: sandbox.playgroundSessionId,
-          isWaitingForUpscale: false,
-          playgroundType: "PlaygroundSnippet",
-          playgroundSnippetId: sandbox.playgroundSnippetId,
-        },
+        playgroundSessionId: sandbox.playgroundSessionId,
+        isWaitingForUpscale: false,
+        playgroundType: "PlaygroundSnippet",
+        playgroundSnippetId: sandbox.playgroundSnippetId,
       });
 
       if (detailsData.response.isWaitingForUpscale === false) {
         sandbox.containerDetails = detailsData.response.containerDetails;
         await sandbox.connect();
+        if (sandbox.config.gitRepoUrl != null) {
+          await sandbox.runCommand({ cmd: "git", args: ["clone", sandbox.config.gitRepoUrl] });
+        }
         return sandbox;
       }
 
