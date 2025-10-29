@@ -236,7 +236,9 @@ export class Sandbox {
 							options.onClose?.(exitCode)
 
 							return
-						}
+						} else {
+              exhaustiveGuard(eventDetails)
+            }
 					}
 				}
 			} else {
