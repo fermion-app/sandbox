@@ -108,7 +108,12 @@ export class ApiClient {
   private readonly baseUrl = "https://backend.codedamn.com/api";
   private apiKey: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string | null) {
+    if (apiKey == null || apiKey.trim() === "") {
+      throw new Error(
+        "API key is required. Please provide a valid API key when creating the sandbox."
+      );
+    }
     this.apiKey = apiKey;
   }
 

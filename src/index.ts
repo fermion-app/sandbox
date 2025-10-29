@@ -38,26 +38,19 @@ export class Sandbox {
     gitRepoUrl,
     shouldBackupFilesystem,
     apiKey,
-    authToken,
   }: {
     gitRepoUrl?: string;
     shouldBackupFilesystem?: boolean;
     apiKey: string;
-    authToken?: string;
   }): Promise<Sandbox> {
-    const api = new ApiClient(apiKey);
-    const sandbox = new Sandbox({ 
-      gitRepoUrl, 
-      shouldBackupFilesystem,
-      apiKey,
-      }
-    );
+    const sandbox = new Sandbox({ gitRepoUrl, shouldBackupFilesystem, apiKey });
+    const api = new ApiClient(sandbox.apiKey);
 
     const snippetData = await api.createPlaygroundSnippet({
       bootParams: {
         source: "empty",
-        shouldBackupFilesystem: shouldBackupFilesystem ?? false,
-      }
+        shouldBackupFilesystem: sandbox.shouldBackupFilesystem ?? false,
+      },
     });
 
     sandbox.playgroundSnippetId = snippetData.playgroundSnippetId;
