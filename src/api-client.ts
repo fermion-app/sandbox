@@ -131,7 +131,6 @@ export class ApiClient {
       context: { namespace, functionName },
       data: validatedData,
     };
-    console.log(request);
 
     const response = await fetch(this.baseUrl, {
       method: "POST",

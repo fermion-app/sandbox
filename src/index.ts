@@ -223,7 +223,7 @@ export class Sandbox {
         while (this.ws.isConnected()) {
           const payload = await this.ws.waitForNextFutureWebSocketEvent({
             eventType: "StreamLongRunningTaskEvent",
-            timeout: 3000,
+            timeout: 30000,
           }); // TODO: check timeout
 
           if (payload.eventType === "StreamLongRunningTaskEvent") {
