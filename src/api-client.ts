@@ -57,8 +57,10 @@ const getRunningPlaygroundSessionDetailsOutputSchema = z.object({
 });
 
 const createPlaygroundSnippetInputSchema = z.object({
-  source: z.literal("empty"),
-  shouldBackupFilesystem: z.boolean(),
+  bootParams: z.object({
+    source: z.literal("empty"),
+    shouldBackupFilesystem: z.boolean(),
+  })
 });
 
 const startPlaygroundSessionInputSchema = z.object({
@@ -101,7 +103,6 @@ export type ContainerDetails = z.infer<typeof containerDetailsSchema>;
  * Handles request validation and error handling
  */
 export class ApiClient {
-  private readonly namespace = "public";
   private readonly baseUrl = "https://backend.codedamn.com/api";
   private apiKey: string;
 
@@ -111,11 +112,13 @@ export class ApiClient {
 
   private async call<T, D>({
     functionName,
+    namespace,
     data,
     inputSchema,
     outputSchema,
   }: {
     functionName: string;
+    namespace: "public" | "fermion-user";
     data: D;
     inputSchema: z.ZodType<D>;
     outputSchema: z.ZodType<T>;
@@ -123,17 +126,18 @@ export class ApiClient {
     const validatedData = inputSchema.parse(data);
 
     const request = {
-      context: { namespace: this.namespace, functionName },
+      context: { namespace, functionName },
       data: validatedData,
     };
+    console.log(request);
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Fermion-Api-Key": this.apiKey,
       },
       body: JSON.stringify({
-        apiKey: this.apiKey,
         data: [request],
       }),
     });
@@ -163,6 +167,7 @@ export class ApiClient {
     return this.call({
       functionName: "create-new-playground-snippet",
       data: params,
+      namespace: "public",
       inputSchema: createPlaygroundSnippetInputSchema,
       outputSchema: createPlaygroundSnippetOutputSchema,
     });
@@ -174,6 +179,7 @@ export class ApiClient {
     return this.call({
       functionName: "start-playground-session",
       data: params,
+      namespace: "public",
       inputSchema: startPlaygroundSessionInputSchema,
       outputSchema: startPlaygroundSessionOutputSchema,
     });
@@ -185,6 +191,7 @@ export class ApiClient {
     return this.call({
       functionName: "get-running-playground-session-details",
       data: params,
+      namespace: "fermion-user",
       inputSchema: getRunningPlaygroundSessionDetailsInputSchema,
       outputSchema: getRunningPlaygroundSessionDetailsOutputSchema,
     });

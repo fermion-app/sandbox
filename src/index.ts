@@ -5,45 +5,59 @@ import { ApiClient, type ContainerDetails } from "./api-client";
 
 dotenv.config();
 
-export interface SandboxConfig {
-  gitRepoUrl?: string;
-  apiKey: string;
-  shouldBackupFilesystem?: boolean;
-}
-
 function exhaustiveGuard(_value: never): never {
   throw new Error(
-    `ERROR! Reached forbidden guard function with unexpected value: ${JSON.stringify(_value)}`,
+    `ERROR! Reached forbidden guard function with unexpected value: ${JSON.stringify(_value)}`
   );
 }
 export class Sandbox {
-  private config: SandboxConfig;
-  private authToken: string;
-  private fermionSchoolId: string;
   private playgroundSessionId: string | null = null;
   private playgroundSnippetId: string | null = null;
   private containerDetails: ContainerDetails | null = null;
-  private timeout: number;
+  private gitRepoUrl: string | null = null;
+  private shouldBackupFilesystem: boolean | null = null;
+  private apiKey: string | null = null;
+  private timeout: number = 30000; // TODO: check timeout
   private ws: SandboxWebSocket | null = null;
 
-  private constructor(config: SandboxConfig) {
-    this.authToken = process.env.AUTH_TOKEN ?? "";
-    this.fermionSchoolId = process.env.FERMION_SCHOOL_ID ?? "";
-    this.timeout = 30000; // TODO: check timeout
-    this.config = {
-      gitRepoUrl: config.gitRepoUrl,
-      shouldBackupFilesystem: config.shouldBackupFilesystem,
-      apiKey: config.apiKey
-    };
+  private constructor({
+    gitRepoUrl,
+    shouldBackupFilesystem,
+    apiKey,
+  }: {
+    gitRepoUrl?: string;
+    shouldBackupFilesystem?: boolean;
+    apiKey: string;
+  }) {
+    this.gitRepoUrl = gitRepoUrl ?? "";
+    this.shouldBackupFilesystem = shouldBackupFilesystem ?? false;
+    this.apiKey = apiKey;
   }
 
-  static async create(config: SandboxConfig): Promise<Sandbox> {
-    const sandbox = new Sandbox(config);
-    const api = new ApiClient(sandbox.config.apiKey);
+  static async create({
+    gitRepoUrl,
+    shouldBackupFilesystem,
+    apiKey,
+    authToken,
+  }: {
+    gitRepoUrl?: string;
+    shouldBackupFilesystem?: boolean;
+    apiKey: string;
+    authToken?: string;
+  }): Promise<Sandbox> {
+    const api = new ApiClient(apiKey, authToken);
+    const sandbox = new Sandbox({ 
+      gitRepoUrl, 
+      shouldBackupFilesystem,
+      apiKey,
+      }
+    );
 
     const snippetData = await api.createPlaygroundSnippet({
+      bootParams: {
         source: "empty",
-        shouldBackupFilesystem: sandbox.config.shouldBackupFilesystem ?? true
+        shouldBackupFilesystem: shouldBackupFilesystem ?? false,
+      }
     });
 
     sandbox.playgroundSnippetId = snippetData.playgroundSnippetId;
@@ -81,8 +95,11 @@ export class Sandbox {
       if (detailsData.response.isWaitingForUpscale === false) {
         sandbox.containerDetails = detailsData.response.containerDetails;
         await sandbox.connect();
-        if (sandbox.config.gitRepoUrl != null) {
-          await sandbox.runCommand({ cmd: "git", args: ["clone", sandbox.config.gitRepoUrl] });
+        if (sandbox.gitRepoUrl != null && sandbox.gitRepoUrl !== "") {
+          await sandbox.runCommand({
+            cmd: "git",
+            args: ["clone", sandbox.gitRepoUrl],
+          });
         }
         return sandbox;
       }
@@ -99,7 +116,7 @@ export class Sandbox {
 
       this.ws = new SandboxWebSocket(
         wsUrl,
-        this.containerDetails.playgroundContainerAccessToken,
+        this.containerDetails.playgroundContainerAccessToken
       );
       await this.ws.connect();
 
@@ -118,12 +135,12 @@ export class Sandbox {
   async getFile(path: string): Promise<ArrayBuffer> {
     if (this.containerDetails != null) {
       const url = new URL(
-        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`,
+        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
       );
       url.searchParams.append("full-path", path);
       url.searchParams.append(
         "playground-container-access-token",
-        this.containerDetails.playgroundContainerAccessToken,
+        this.containerDetails.playgroundContainerAccessToken
       );
 
       const response = await fetch(url);
@@ -151,12 +168,12 @@ export class Sandbox {
   }): Promise<void> {
     if (this.containerDetails != null) {
       const url = new URL(
-        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`,
+        `https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
       );
       url.searchParams.append("full-path", path);
       url.searchParams.append(
         "playground-container-access-token",
-        this.containerDetails.playgroundContainerAccessToken,
+        this.containerDetails.playgroundContainerAccessToken
       );
 
       const response = await fetch(url, {
