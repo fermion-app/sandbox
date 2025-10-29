@@ -68,10 +68,12 @@ const startPlaygroundSessionInputSchema = z.object({
 });
 
 const getRunningPlaygroundSessionDetailsInputSchema = z.object({
+  params: z.object({
     playgroundSessionId: z.string(),
     isWaitingForUpscale: z.boolean(),
     playgroundType: z.literal("PlaygroundSnippet"),
     playgroundSnippetId: z.string(),
+  }),
 });
 
 // Export types

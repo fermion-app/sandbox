@@ -45,7 +45,7 @@ export class Sandbox {
     apiKey: string;
     authToken?: string;
   }): Promise<Sandbox> {
-    const api = new ApiClient(apiKey, authToken);
+    const api = new ApiClient(apiKey);
     const sandbox = new Sandbox({ 
       gitRepoUrl, 
       shouldBackupFilesystem,
@@ -86,10 +86,12 @@ export class Sandbox {
 
     for (let i = 0; i < max; i++) {
       const detailsData = await api.getRunningPlaygroundSessionDetails({
-        playgroundSessionId: sandbox.playgroundSessionId,
-        isWaitingForUpscale: false,
-        playgroundType: "PlaygroundSnippet",
-        playgroundSnippetId: sandbox.playgroundSnippetId,
+        params: {
+          playgroundSessionId: sandbox.playgroundSessionId,
+          isWaitingForUpscale: false,
+          playgroundType: "PlaygroundSnippet",
+          playgroundSnippetId: sandbox.playgroundSnippetId,
+        },
       });
 
       if (detailsData.response.isWaitingForUpscale === false) {
