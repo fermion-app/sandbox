@@ -7,6 +7,7 @@ A TypeScript SDK for creating and managing isolated code execution environments.
 - 🚀 Create isolated sandbox containers on-demand
 - 💻 Execute commands with streaming or complete output
 - 📁 File operations (read, write) with binary support
+- 🌐 Public URLs for ports 3000, 1337, 1338 - run web servers and share instantly
 - 🔌 WebSocket-based real-time communication
 - ♻️ Automatic reconnection and health monitoring
 - 📦 Full TypeScript support with detailed JSDoc
@@ -219,7 +220,87 @@ Gets the container connection details.
 
 **Returns:** `ContainerDetails | null` - Details including subdomain and access token, or null if not initialized
 
+#### `getPublicUrl(port: number): string`
+
+Gets the public URL for a specific port.
+
+**Parameters:**
+- `port` (number, required): Port number - must be 3000, 1337, or 1338
+
+**Returns:** `string` - Public HTTPS URL for the specified port
+
+**Throws:**
+- Error if container not initialized
+- Error if port is not supported
+
+**Example:**
+```typescript
+// Start a web server on port 3000
+await sandbox.runStreamingCommand({
+  cmd: 'node',
+  args: ['-e', 'require("http").createServer((req,res) => res.end("Hello")).listen(3000)']
+})
+
+// Get the public URL
+const url = sandbox.getPublicUrl(3000)
+console.log(`Visit: ${url}`)
+// Output: https://abc123-3000.run-code.com
+```
+
+#### `exportPort(port: 3000 | 1337 | 1338): Promise<string>`
+
+Exports a port to the public internet.
+
+**Parameters:**
+- `port` (number, required): Port number - must be 3000, 1337, or 1338
+
+**Returns:** `Promise<string>` - Public HTTPS URL for the specified port
+
 ## Complete Examples
+
+### Deploying a Web Application with Public URL
+
+```typescript
+import { Sandbox } from '@fermion-app/sandbox'
+
+const sandbox = await Sandbox.create({
+  apiKey: process.env.FERMION_API_KEY
+})
+
+// Create a simple Express server
+await sandbox.setFile({
+  path: '/home/user/server.js',
+  content: `
+    const http = require('http');
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<h1>Hello from Fermion Sandbox!</h1>');
+    });
+    server.listen(3000, () => {
+      console.log('Server running on port 3000');
+    });
+  `
+})
+
+// Start the server in background
+await sandbox.runStreamingCommand({
+  cmd: 'node',
+  args: ['server.js'],
+  onStdout: (data) => console.log(data.trim()),
+  onStderr: (data) => console.error(data.trim())
+})
+
+// Get the public URL
+const publicUrl = sandbox.getPublicUrl(3000)
+console.log(`🚀 Your app is live at: ${publicUrl}`)
+
+// Or get all available URLs
+const allUrls = sandbox.getPublicUrls()
+console.log('Available ports:', allUrls)
+
+// Keep the sandbox running...
+// When done: await sandbox.disconnect()
+```
 
 ### Running a Build Process
 

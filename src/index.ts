@@ -531,4 +531,84 @@ export class Sandbox {
 	isConnected(): boolean {
 		return this.ws?.isConnected() ?? false
 	}
+
+	/**
+	 * Gets the public URL for a specific port
+	 *
+	 * @remarks
+	 * The sandbox exposes certain ports publicly for running web servers and APIs.
+	 * Supported ports: 3000, 1337, 1338
+	 *
+	 * @param port - Port number (must be 3000, 1337, or 1338)
+	 * @returns Public HTTPS URL for the specified port
+	 *
+	 * @throws {Error} If container is not initialized
+	 * @throws {Error} If port is not supported
+	 *
+	 * @example
+	 * ```typescript
+	 * // Start a web server on port 3000
+	 * await sandbox.setFile({
+	 *   path: '/home/user/server.js',
+	 *   content: `
+	 *     const http = require('http');
+	 *     http.createServer((req, res) => {
+	 *       res.end('Hello World');
+	 *     }).listen(3000);
+	 *   `
+	 * })
+	 * await sandbox.runCommand({ cmd: 'node', args: ['server.js'] })
+	 *
+	 * // Get the public URL
+	 * const url = sandbox.getPublicUrl(3000)
+	 * console.log(`Server running at: ${url}`)
+	 * // Output: https://abc123-3000.run-code.com
+	 * ```
+	 *
+	 * @public
+	 */
+	async exportPort(port: 3000 | 1337 | 1338): Promise<string> {
+		if (this.containerDetails == null) {
+			throw new Error('No container found')
+		}
+
+		return `https://${this.containerDetails.subdomain}-${port}.run-code.com`
+	}
+
+	/**
+	 * Gets all available public URLs for the container
+	 *
+	 * @remarks
+	 * Returns an object with public URLs for all supported ports (3000, 1337, 1338).
+	 * These URLs are always available, but will only respond if a server is running on that port.
+	 *
+	 * @returns Object mapping port numbers to their public URLs
+	 *
+	 * @throws {Error} If container is not initialized
+	 *
+	 * @example
+	 * ```typescript
+	 * const urls = sandbox.getPublicUrls()
+	 * console.log(urls)
+	 * // Output:
+	 * // {
+	 * //   3000: 'https://abc123-3000.run-code.com',
+	 * //   1337: 'https://abc123-1337.run-code.com',
+	 * //   1338: 'https://abc123-1338.run-code.com'
+	 * // }
+	 * ```
+	 *
+	 * @public
+	 */
+	getPublicUrls(): { 3000: string; 1337: string; 1338: string } {
+		if (this.containerDetails == null) {
+			throw new Error('No container found')
+		}
+
+		return {
+			3000: `https://${this.containerDetails.subdomain}-3000.run-code.com`,
+			1337: `https://${this.containerDetails.subdomain}-1337.run-code.com`,
+			1338: `https://${this.containerDetails.subdomain}-1338.run-code.com`
+		}
+	}
 }

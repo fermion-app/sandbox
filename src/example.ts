@@ -10,7 +10,7 @@ import { Sandbox } from './index'
  * - Installing dependencies
  */
 async function main() {
-	const apiKey = process.env.API_KEY ?? 'aml8s6s1jtl22l38nzejrbgjbpspapo633j7fglu5xn0o0bwtm4rqrsqgl0v72gk2gk1053gl8cm6wsp0pp6byjf8k6bbeabsfhfquioj3kdacdo0vzy4008vn7vfahi'
+	const apiKey = ''
 
 	// Create sandbox instance
 	const sandbox = new Sandbox({
