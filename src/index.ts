@@ -87,9 +87,12 @@ export class Sandbox {
 				sandbox.containerDetails = detailsData.response.containerDetails
 				await sandbox.connect()
 				if (sandbox.gitRepoUrl != null && sandbox.gitRepoUrl !== '') {
-					await sandbox.runCommand({
+					await sandbox.runStreamingCommand({
 						cmd: 'git',
-						args: ['clone', sandbox.gitRepoUrl]
+						args: ['clone', sandbox.gitRepoUrl],
+						onStdout: data => console.log(data.trim()),
+						onStderr: data => console.log(data.trim()),
+						onClose: code => console.log(`Exit code: ${code}`)
 					})
 				}
 				return sandbox
@@ -118,9 +121,21 @@ export class Sandbox {
 		}
 	}
 
-	disconnect(): void {
+	async disconnect(): Promise<void> {
 		this.ws?.disconnect()
 		this.ws = null
+
+		if (this.containerDetails != null) {
+			const url = new URL(
+				`https://${this.containerDetails.subdomain}-13372.run-code.com/disconnect-sandbox`
+			)
+			url.searchParams.append(
+				'playground-container-access-token',
+				this.containerDetails.playgroundContainerAccessToken
+			)
+
+			await fetch(url, { method: 'GET' })
+		}
 	}
 
 	async getFile(path: string): Promise<ArrayBuffer> {
