@@ -13,7 +13,7 @@ export class Sandbox {
 	private gitRepoUrl: string | null = null
 	private shouldBackupFilesystem: boolean | null = null
 	private apiKey: string | null = null
-	private timeout: number = 30000 // TODO: check timeout
+	private timeout = 30000 // TODO: check timeout
 	private ws: SandboxWebSocket | null = null
 
 	private constructor({
@@ -224,7 +224,7 @@ export class Sandbox {
 			if (startResponse.eventType === 'RunLongRunningCommand') {
 				const { uniqueTaskId } = startResponse.data
 
-				await this.ws.addStreamingTaskHandler({
+				this.ws.addStreamingTaskHandler({
 					uniqueTaskId,
 					handler: {
 						onStdout: options.onStdout,

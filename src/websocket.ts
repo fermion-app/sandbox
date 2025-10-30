@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import { nanoid } from 'nanoid'
-import { WebSocketRequestPayload, WebSocketResponsePayload } from './constants'
+import { type WebSocketRequestPayload, type WebSocketResponsePayload } from './constants'
 
 class DeferredPromise<T> {
 	promise: Promise<T>
@@ -146,7 +146,7 @@ export class SandboxWebSocket {
 		return deferredPromise.promise
 	}
 
-	async addStreamingTaskHandler({
+	addStreamingTaskHandler({
 		uniqueTaskId,
 		handler
 	}: {
@@ -156,7 +156,7 @@ export class SandboxWebSocket {
 			onStderr?: (stderr: string) => void
 			onClose?: (exitCode: number) => void
 		}
-	}): Promise<void> {
+	}): void {
 		this.streamingTaskHandlers.set(uniqueTaskId, handler)
 	}
 

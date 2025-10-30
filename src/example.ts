@@ -93,7 +93,7 @@ console.log('Project:', pkg.name || 'unnamed');
 
 		// 6. Clean up
 		console.log('Disconnecting sandbox...')
-		sandbox.disconnect()
+		await sandbox.disconnect()
 		console.log('✓ Done!')
 	} catch (error) {
 		console.error('Error:', error instanceof Error ? error.message : error)
