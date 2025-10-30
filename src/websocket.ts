@@ -338,10 +338,6 @@ export class SandboxWebSocket {
 		this.startHealthPing()
 	}
 
-	/**
-	 * Sends periodic health pings to keep the connection alive
-	 * Matches frontend behavior - sends HealthPing every 30s
-	 */
 	private startHealthPing(): void {
 		if (this.healthPingTimeoutId != null) {
 			clearTimeout(this.healthPingTimeoutId)
