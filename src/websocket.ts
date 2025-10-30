@@ -53,13 +53,7 @@ export class SandboxWebSocket {
 		}
 	>()
 
-	constructor({
-		url,
-		token,
-	}: {
-		url: string
-		token: string
-	}) {
+	constructor({ url, token }: { url: string; token: string }) {
 		this.url = url
 		this.token = token
 	}
@@ -152,13 +146,17 @@ export class SandboxWebSocket {
 		return deferredPromise.promise
 	}
 
-	async addStreamingTaskHandler({ uniqueTaskId, handler }: {
-	uniqueTaskId: string
-	handler: {
-		onStdout?: (stdout: string) => void
-		onStderr?: (stderr: string) => void
-		onClose?: (exitCode: number) => void }
-}): Promise<void> {
+	async addStreamingTaskHandler({
+		uniqueTaskId,
+		handler
+	}: {
+		uniqueTaskId: string
+		handler: {
+			onStdout?: (stdout: string) => void
+			onStderr?: (stderr: string) => void
+			onClose?: (exitCode: number) => void
+		}
+	}): Promise<void> {
 		this.streamingTaskHandlers.set(uniqueTaskId, handler)
 	}
 
@@ -219,14 +217,12 @@ export class SandboxWebSocket {
 
 			if (handler != null) {
 				if (eventDetails.type === 'io') {
-
 					if (eventDetails.stdout != null) {
 						handler.onStdout?.(eventDetails.stdout)
 					}
 					if (eventDetails.stderr != null) {
 						handler.onStderr?.(eventDetails.stderr)
 					}
-
 				} else if (eventDetails.type === 'close') {
 					handler.onClose?.(eventDetails.code)
 					this.streamingTaskHandlers.delete(uniqueTaskId)

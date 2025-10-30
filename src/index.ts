@@ -110,7 +110,7 @@ export class Sandbox {
 
 			this.ws = new SandboxWebSocket({
 				url: wsUrl,
-				token: this.containerDetails.playgroundContainerAccessToken,
+				token: this.containerDetails.playgroundContainerAccessToken
 			})
 			await this.ws.connect()
 
