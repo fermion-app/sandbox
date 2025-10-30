@@ -244,9 +244,7 @@ export class Sandbox {
 				this.containerDetails.playgroundContainerAccessToken
 			)
 
-			const response = await fetch(url, { method: 'GET' })
-			console.log('Disconnect response', response)
-
+			await fetch(url, { method: 'GET' })
 		}
 	}
 
@@ -269,7 +267,7 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async getFile(path: string): Promise<ArrayBuffer> {
+	async getFile(path: string): Promise<Response> {
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
@@ -289,8 +287,7 @@ export class Sandbox {
 				throw new Error(`Failed to get file: ${response.statusText}`)
 			}
 
-			const content = await response.arrayBuffer()
-			return content
+			return response
 		} else {
 			throw new Error('No container found')
 		}
