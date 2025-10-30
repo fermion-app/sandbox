@@ -210,15 +210,14 @@ export class Sandbox {
 					})
 				}
 
-				// Clone git repo if provided
 				if (this.gitRepoUrl != null && this.gitRepoUrl !== '') {
-					await new Promise<void>((resolve) => {
+					await new Promise<void>(resolve => {
 						void this.runStreamingCommand({
 							cmd: 'git',
 							args: ['clone', this.gitRepoUrl!],
-							onStdout: (data) => console.log(data.trim()),
-							onStderr: (data) => console.log(data.trim()),
-							onClose: (exitCode) => {
+							onStdout: data => console.log(data.trim()),
+							onStderr: data => console.log(data.trim()),
+							onClose: exitCode => {
 								console.log(`Git clone completed with exit code: ${exitCode}`)
 								resolve()
 							}
