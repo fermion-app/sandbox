@@ -113,7 +113,6 @@ export class Sandbox {
 		shouldBackupFilesystem?: boolean
 		apiKey: string
 	}): Promise<Sandbox> {
-	
 		const sandbox = new Sandbox()
 
 		sandbox.gitRepoUrl = gitRepoUrl ?? ''
@@ -167,12 +166,18 @@ export class Sandbox {
 				sandbox.containerDetails = detailsData.response.containerDetails
 				await sandbox.connect()
 				if (sandbox.gitRepoUrl != null && sandbox.gitRepoUrl !== '') {
-					await sandbox.runStreamingCommand({
-						cmd: 'git',
-						args: ['clone', sandbox.gitRepoUrl],
-						onStdout: data => console.log(data.trim()),
-						onStderr: data => console.log(data.trim()),
-						onClose: code => console.log(`Exit code: ${code}`)
+					const gitRepoUrl = sandbox.gitRepoUrl
+					await new Promise<void>(resolve => {
+						void sandbox.runStreamingCommand({
+							cmd: 'git',
+							args: ['clone', gitRepoUrl],
+							onStdout: data => console.log(data.trim()),
+							onStderr: data => console.log(data.trim()),
+							onClose: exitCode => {
+								console.log(`Git clone completed with exit code: ${exitCode}`)
+								resolve()
+							}
+						})
 					})
 				}
 				return sandbox
@@ -392,12 +397,6 @@ export class Sandbox {
 		onClose?: (exitCode: number) => void
 	}): Promise<void> {
 		if (this.ws != null) {
-			const data: Record<string, string | string[]> = { command: options.cmd }
-			data.args = options.args
-			if (options.stdin != null) {
-				data.stdin = options.stdin
-			}
-
 			const startResponse = await this.ws.send({
 				payload: {
 					eventType: 'RunLongRunningCommand',

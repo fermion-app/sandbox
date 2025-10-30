@@ -48,8 +48,7 @@ async function main() {
 
 		// Read it back
 		const content = await sandbox.getFile('/home/damner/code/hello.txt')
-		const decoder = new TextDecoder()
-		console.log('✓ File content:', decoder.decode(content))
+		console.log('✓ File content:', await content.text())
 		console.log()
 
 		// 4. Create and execute a script
