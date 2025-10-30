@@ -69,25 +69,6 @@ export class Sandbox {
 	private ws: SandboxWebSocket | null = null
 
 	/**
-	 * Private constructor - use Sandbox.create() instead
-	 * @param options - Configuration options
-	 * @internal
-	 */
-	private constructor({
-		gitRepoUrl,
-		shouldBackupFilesystem,
-		apiKey
-	}: {
-		gitRepoUrl?: string
-		shouldBackupFilesystem?: boolean
-		apiKey: string
-	}) {
-		this.gitRepoUrl = gitRepoUrl ?? ''
-		this.shouldBackupFilesystem = shouldBackupFilesystem ?? false
-		this.apiKey = apiKey
-	}
-
-	/**
 	 * Creates and initializes a new Sandbox instance
 	 *
 	 * @remarks
@@ -132,7 +113,13 @@ export class Sandbox {
 		shouldBackupFilesystem?: boolean
 		apiKey: string
 	}): Promise<Sandbox> {
-		const sandbox = new Sandbox({ gitRepoUrl, shouldBackupFilesystem, apiKey })
+	
+		const sandbox = new Sandbox()
+
+		sandbox.gitRepoUrl = gitRepoUrl ?? ''
+		sandbox.shouldBackupFilesystem = shouldBackupFilesystem ?? false
+		sandbox.apiKey = apiKey
+
 		const api = new ApiClient(sandbox.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
@@ -206,10 +193,13 @@ export class Sandbox {
 	 *
 	 * @throws {Error} If container details are not available
 	 *
-	 * @public
+	 * @private
 	 */
-	async connect(): Promise<void> {
+	private async connect(): Promise<void> {
 		if (this.containerDetails != null) {
+			if (this.isConnected()) {
+				throw new Error('WebSocket already connected')
+			}
 			const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 
 			this.ws = new SandboxWebSocket({
@@ -254,7 +244,9 @@ export class Sandbox {
 				this.containerDetails.playgroundContainerAccessToken
 			)
 
-			await fetch(url, { method: 'GET' })
+			const response = await fetch(url, { method: 'GET' })
+			console.log('Disconnect response', response)
+
 		}
 	}
 
@@ -444,6 +436,7 @@ export class Sandbox {
 	 *
 	 * @remarks
 	 * Use this for quick commands that complete within seconds (e.g., file operations, simple scripts).
+	 * This command cannot run for more than 5 seconds.
 	 * The promise resolves when the command finishes with both stdout and stderr.
 	 * For long-running commands, use runStreamingCommand() instead.
 	 *

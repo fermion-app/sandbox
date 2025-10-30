@@ -114,7 +114,7 @@ export class SandboxWebSocket {
 	 * @returns Promise that resolves when connection is established
 	 * @throws {Error} If connection fails
 	 *
-	 * @public
+	 * @private
 	 */
 	async connect(): Promise<void> {
 		if (this.connectionState !== 'connected') {
@@ -354,7 +354,7 @@ export class SandboxWebSocket {
 					console.error('[SandboxWebSocket] Health ping failed', error)
 				})
 
-				this.healthPingTimeoutId = setTimeout(sendHealthPing, 30000) // TODO: check timeout
+				this.healthPingTimeoutId = setTimeout(sendHealthPing, 10000) // TODO: check timeout
 			}
 		}
 
