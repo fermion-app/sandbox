@@ -272,7 +272,7 @@ export class Sandbox {
 	 * Retrieves a file from the container filesystem
 	 *
 	 * @param path - Absolute path to the file in the container
-	 * @returns File contents as ArrayBuffer
+	 * @returns Response object - use .text(), .arrayBuffer(), .blob(), etc.
 	 *
 	 * @throws {Error} If file is not found (404)
 	 * @throws {Error} If container is not initialized
@@ -280,9 +280,14 @@ export class Sandbox {
 	 *
 	 * @example
 	 * ```typescript
-	 * const fileBuffer = await sandbox.getFile('/home/user/output.txt')
-	 * const text = new TextDecoder().decode(fileBuffer)
+	 * // Get as text
+	 * const response = await sandbox.getFile('/home/user/output.txt')
+	 * const text = await response.text()
 	 * console.log(text)
+	 *
+	 * // Get as buffer
+	 * const response = await sandbox.getFile('/home/user/data.bin')
+	 * const buffer = await response.arrayBuffer()
 	 * ```
 	 *
 	 * @public
