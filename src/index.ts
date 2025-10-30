@@ -23,12 +23,13 @@ function exhaustiveGuard(_value: never): never {
  *
  * @example
  * ```typescript
- * // Create a new sandbox
- * const sandbox = await Sandbox.create({
+ * // Create and connect to a new sandbox
+ * const sandbox = new Sandbox({
  *   apiKey: 'your-api-key',
  *   gitRepoUrl: 'https://github.com/user/repo.git',
  *   shouldBackupFilesystem: true
  * })
+ * await sandbox.connect()
  *
  * // Run commands
  * const result = await sandbox.runCommand({
@@ -69,42 +70,36 @@ export class Sandbox {
 	private ws: SandboxWebSocket | null = null
 
 	/**
-	 * Creates and initializes a new Sandbox instance
+	 * Creates a new Sandbox instance
 	 *
 	 * @remarks
-	 * This is the primary way to create a sandbox. It handles:
-	 * - Creating a playground snippet
-	 * - Starting a playground session
-	 * - Waiting for container provisioning
-	 * - Establishing WebSocket connection
-	 * - Optionally cloning a git repository
+	 * This constructor initializes the sandbox with configuration but does not
+	 * establish a connection. Call connect() after construction to provision
+	 * the container and establish the connection.
 	 *
-	 * @param options - Configuration options for the sandbox
-	 * @param options.apiKey - API key for authentication (required)
-	 * @param options.gitRepoUrl - Optional git repository URL to clone on startup
-	 * @param options.shouldBackupFilesystem - Whether to persist filesystem after shutdown
-	 *
-	 * @returns A fully initialized Sandbox instance
-	 *
-	 * @throws {Error} If container provisioning times out (default: 30 seconds)
-	 * @throws {Error} If session creation fails or requires attention
+	 * @param options - Configuration options
+	 * @param options.apiKey - API key for authentication with the sandbox service (required)
+	 * @param options.gitRepoUrl - Optional git repository URL to clone during connection
+	 * @param options.shouldBackupFilesystem - Whether to persist filesystem changes after shutdown (default: false)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Create a basic sandbox
-	 * const sandbox = await Sandbox.create({ apiKey: 'your-key' })
+	 * // Basic sandbox
+	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * await sandbox.connect()
 	 *
-	 * // Create sandbox with git repo
-	 * const sandbox = await Sandbox.create({
-	 *   apiKey: 'your-key',
+	 * // With git repository
+	 * const sandbox = new Sandbox({
+	 *   apiKey: 'your-api-key',
 	 *   gitRepoUrl: 'https://github.com/user/repo.git',
 	 *   shouldBackupFilesystem: true
 	 * })
+	 * await sandbox.connect()
 	 * ```
 	 *
 	 * @public
 	 */
-	static async create({
+	constructor({
 		gitRepoUrl,
 		shouldBackupFilesystem,
 		apiKey
@@ -112,26 +107,57 @@ export class Sandbox {
 		gitRepoUrl?: string
 		shouldBackupFilesystem?: boolean
 		apiKey: string
-	}): Promise<Sandbox> {
-		const sandbox = new Sandbox()
+	}) {
+		this.gitRepoUrl = gitRepoUrl ?? ''
+		this.shouldBackupFilesystem = shouldBackupFilesystem ?? false
+		this.apiKey = apiKey
+	}
 
-		sandbox.gitRepoUrl = gitRepoUrl ?? ''
-		sandbox.shouldBackupFilesystem = shouldBackupFilesystem ?? false
-		sandbox.apiKey = apiKey
-
-		const api = new ApiClient(sandbox.apiKey)
+	/**
+	 * Connects to the sandbox and initializes the container
+	 *
+	 * @remarks
+	 * This method provisions a new container and establishes a connection. It:
+	 * 1. Creates a playground snippet with the configured settings
+	 * 2. Starts a playground session
+	 * 3. Waits for container provisioning (polls until ready or timeout)
+	 * 4. Establishes WebSocket connection to the container
+	 * 5. Waits for container server to be ready
+	 * 6. Clones the git repository if configured
+	 *
+	 * Call this method after constructing the Sandbox instance to establish
+	 * the connection and begin using the sandbox.
+	 *
+	 * @returns Promise that resolves when the sandbox is fully connected and ready
+	 *
+	 * @throws {Error} If container provisioning times out (default: 30 seconds)
+	 * @throws {Error} If session creation fails or requires attention
+	 * @throws {Error} If WebSocket connection fails
+	 * @throws {Error} If git clone fails (when gitRepoUrl is provided)
+	 *
+	 * @example
+	 * ```typescript
+	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * await sandbox.connect()
+	 * console.log('Sandbox ready!')
+	 * ```
+	 *
+	 * @public
+	 */
+	async connect(): Promise<void> {
+		const api = new ApiClient(this.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
 			bootParams: {
 				source: 'empty',
-				shouldBackupFilesystem: sandbox.shouldBackupFilesystem ?? false
+				shouldBackupFilesystem: this.shouldBackupFilesystem ?? false
 			}
 		})
 
-		sandbox.playgroundSnippetId = snippetData.playgroundSnippetId
+		this.playgroundSnippetId = snippetData.playgroundSnippetId
 
 		const sessionData = await api.startPlaygroundSession({
-			playgroundSnippetId: sandbox.playgroundSnippetId
+			playgroundSnippetId: this.playgroundSnippetId
 		})
 
 		if (sessionData.response.status === 'attention-needed') {
@@ -147,77 +173,65 @@ export class Sandbox {
 			}
 		}
 
-		sandbox.playgroundSessionId = sessionData.response.playgroundSessionId
+		this.playgroundSessionId = sessionData.response.playgroundSessionId
 
 		const interval = 500
-		const max = Math.ceil(sandbox.timeout / interval)
+		const max = Math.ceil(this.timeout / interval)
 
 		for (let i = 0; i < max; i++) {
 			const detailsData = await api.getRunningPlaygroundSessionDetails({
 				params: {
-					playgroundSessionId: sandbox.playgroundSessionId,
+					playgroundSessionId: this.playgroundSessionId,
 					isWaitingForUpscale: false,
 					playgroundType: 'PlaygroundSnippet',
-					playgroundSnippetId: sandbox.playgroundSnippetId
+					playgroundSnippetId: this.playgroundSnippetId
 				}
 			})
 
 			if (detailsData.response.isWaitingForUpscale === false) {
-				sandbox.containerDetails = detailsData.response.containerDetails
-				await sandbox.connect()
-				if (sandbox.gitRepoUrl != null && sandbox.gitRepoUrl !== '') {
-					const gitRepoUrl = sandbox.gitRepoUrl
-					await new Promise<void>(resolve => {
-						void sandbox.runStreamingCommand({
+				this.containerDetails = detailsData.response.containerDetails
+
+				// Establish WebSocket connection
+				if (this.containerDetails != null) {
+					if (this.isConnected()) {
+						throw new Error('WebSocket already connected')
+					}
+					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
+
+					this.ws = new SandboxWebSocket({
+						url: wsUrl,
+						token: this.containerDetails.playgroundContainerAccessToken
+					})
+					await this.ws.connect()
+
+					await this.ws.waitForNextFutureWebSocketEvent({
+						eventType: 'ContainerServerReady',
+						timeout: 10000
+					})
+				}
+
+				// Clone git repo if provided
+				if (this.gitRepoUrl != null && this.gitRepoUrl !== '') {
+					await new Promise<void>((resolve) => {
+						void this.runStreamingCommand({
 							cmd: 'git',
-							args: ['clone', gitRepoUrl],
-							onStdout: data => console.log(data.trim()),
-							onStderr: data => console.log(data.trim()),
-							onClose: exitCode => {
+							args: ['clone', this.gitRepoUrl!],
+							onStdout: (data) => console.log(data.trim()),
+							onStderr: (data) => console.log(data.trim()),
+							onClose: (exitCode) => {
 								console.log(`Git clone completed with exit code: ${exitCode}`)
 								resolve()
 							}
 						})
 					})
 				}
-				return sandbox
+				return
 			}
 
 			await new Promise(r => setTimeout(r, interval))
 		}
 
 		throw new Error('Provisioning timeout')
-	}
-
-	/**
-	 * Establishes WebSocket connection to the container
-	 *
-	 * @remarks
-	 * This method is called automatically by create(). You only need to call this
-	 * manually if you've disconnected and want to reconnect.
-	 *
-	 * @throws {Error} If container details are not available
-	 *
-	 * @private
-	 */
-	private async connect(): Promise<void> {
-		if (this.containerDetails != null) {
-			if (this.isConnected()) {
-				throw new Error('WebSocket already connected')
-			}
-			const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
-
-			this.ws = new SandboxWebSocket({
-				url: wsUrl,
-				token: this.containerDetails.playgroundContainerAccessToken
-			})
-			await this.ws.connect()
-
-			await this.ws.waitForNextFutureWebSocketEvent({
-				eventType: 'ContainerServerReady',
-				timeout: 10000
-			}) // TODO: check timeout
-		}
 	}
 
 	/**
@@ -229,7 +243,8 @@ export class Sandbox {
 	 *
 	 * @example
 	 * ```typescript
-	 * const sandbox = await Sandbox.create({ apiKey: 'key' })
+	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * await sandbox.connect()
 	 * // ... do work ...
 	 * await sandbox.disconnect()
 	 * ```

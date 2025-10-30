@@ -13,9 +13,10 @@ async function main() {
 	try {
 		// 1. Create a sandbox instance
 		console.log('Creating sandbox...')
-		const sandbox = await Sandbox.create({
+		const sandbox = new Sandbox({
 			apiKey: process.env.API_KEY ?? ''
 		})
+		await sandbox.connect()
 
 		console.log('✓ Sandbox created')
 		console.log('  Session ID:', sandbox.getSessionId())
