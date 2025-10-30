@@ -1,87 +1,73 @@
 import { Sandbox } from './index'
 
+/**
+ * Example: Working with a real repository
+ *
+ * This example demonstrates:
+ * - Creating a sandbox and cloning a repository
+ * - Reading and writing files
+ * - Running commands (both quick and streaming)
+ * - Installing dependencies
+ */
 async function main() {
+	const apiKey = process.env.API_KEY ?? 'aml8s6s1jtl22l38nzejrbgjbpspapo633j7fglu5xn0o0bwtm4rqrsqgl0v72gk2gk1053gl8cm6wsp0pp6byjf8k6bbeabsfhfquioj3kdacdo0vzy4008vn7vfahi'
+
+	// Create sandbox instance
+	const sandbox = new Sandbox({
+		apiKey,
+		gitRepoUrl: 'https://github.com/gautamtayal1/perpetual-trading'
+	})
+
 	try {
-		console.log('=== Fermion Sandbox SDK - Real Project Example ===\n')
-
-		// 1. Create and connect to sandbox with git repo
-		console.log('1. Creating sandbox and cloning repository...')
-		const sandbox = new Sandbox({
-			apiKey: process.env.API_KEY ?? 'aml8s6s1jtl22l38nzejrbgjbpspapo633j7fglu5xn0o0bwtm4rqrsqgl0v72gk2gk1053gl8cm6wsp0pp6byjf8k6bbeabsfhfquioj3kdacdo0vzy4008vn7vfahi',
-			gitRepoUrl: 'https://github.com/gautamtayal1/perpetual-trading'
-		})
+		// Connect and wait for repository to clone
 		await sandbox.connect()
-		console.log('Connected and repository cloned!\n')
+		console.log('Connected to sandbox')
 
-		// 2. Check what was cloned
-		console.log('2. Listing project files...')
-		const { stdout: lsOutput } = await sandbox.runCommand({
+		// List cloned files
+		const { stdout } = await sandbox.runCommand({
 			cmd: 'ls',
 			args: ['-la', '/home/damner/code/perpetual-trading']
 		})
-		console.log(`   Files:\n${lsOutput}\n`)
+		console.log('Repository contents:', stdout)
 
-		// 3. Read package.json to see project details
-		console.log('3. Reading package.json...')
-		const pkgResponse = await sandbox.getFile('/home/damner/code/perpetual-trading/package.json')
-		const pkgText = await pkgResponse.text()
-		const pkg = JSON.parse(pkgText)
-		console.log(`   Project: ${pkg.name}`)
-		console.log(`   Description: ${pkg.description || 'N/A'}\n`)
+		// Read package.json
+		const response = await sandbox.getFile('/home/damner/code/perpetual-trading/package.json')
+		const packageJson = JSON.parse(await response.text())
+		console.log('Project name:', packageJson.name)
 
-		// 4. Install dependencies (streaming command)
-		console.log('4. Installing dependencies with pnpm...')
+		// Install dependencies
 		await new Promise<void>((resolve) => {
-			void sandbox.runStreamingCommand({
+			sandbox.runStreamingCommand({
 				cmd: 'bash',
 				args: ['-c', 'cd /home/damner/code/perpetual-trading && pnpm install'],
-				onStdout: (data) => {
-					if (data.trim()) console.log(`   ${data.trim()}`)
-				},
-				onStderr: (data) => {
-					if (data.trim()) console.log(`   ${data.trim()}`)
-				},
-				onClose: (exitCode) => {
-					console.log(`✓ Installation complete (exit code: ${exitCode})\n`)
+				onStdout: (data) => process.stdout.write(data),
+				onStderr: (data) => process.stderr.write(data),
+				onClose: (code) => {
+					console.log('Installation finished with code:', code)
 					resolve()
 				}
 			})
 		})
 
-		// 5. Create a test file in the project
-		console.log('5. Creating a test file...')
+		// Create and run a test file
 		await sandbox.setFile({
-			path: '/home/damner/code/perpetual-trading/test-sandbox.js',
-			content: 'console.log("Running in Fermion Sandbox!")\nconsole.log("Node version:", process.version)'
+			path: '/home/damner/code/perpetual-trading/test.js',
+			content: 'console.log("Hello from sandbox")'
 		})
-		console.log('✓ Test file created\n')
 
-		// 6. Run the test file
-		console.log('6. Running test file...')
 		await new Promise<void>((resolve) => {
-			void sandbox.runStreamingCommand({
+			sandbox.runStreamingCommand({
 				cmd: 'node',
-				args: ['/home/damner/code/perpetual-trading/test-sandbox.js'],
-				onStdout: (data) => console.log(`   ${data.trim()}`),
-				onStderr: (data) => console.error(`   Error: ${data}`),
-				onClose: (exitCode) => {
-					console.log(`✓ Test completed (exit code: ${exitCode})\n`)
-					resolve()
-				}
+				args: ['/home/damner/code/perpetual-trading/test.js'],
+				onStdout: (data) => console.log(data.trim()),
+				onClose: () => resolve()
 			})
 		})
 
-		// 7. Disconnect
-		console.log('7. Disconnecting...')
+	} finally {
+		// Always disconnect to clean up resources
 		await sandbox.disconnect()
-		console.log('✓ Disconnected!\n')
-
-		console.log('=== All examples completed successfully! ===')
-	} catch (error) {
-		console.error('❌ Error:', error instanceof Error ? error.message : error)
-		process.exit(1)
 	}
 }
 
-// Run the example
-main()
+main().catch(console.error)
