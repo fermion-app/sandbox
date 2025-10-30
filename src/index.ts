@@ -105,10 +105,10 @@ export class Sandbox {
 		if (this.containerDetails != null) {
 			const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 
-			this.ws = new SandboxWebSocket(
-				wsUrl,
-				this.containerDetails.playgroundContainerAccessToken
-			)
+			this.ws = new SandboxWebSocket({
+				url: wsUrl,
+				token: this.containerDetails.playgroundContainerAccessToken,
+			})
 			await this.ws.connect()
 
 			await this.ws.waitForNextFutureWebSocketEvent({
@@ -209,38 +209,14 @@ export class Sandbox {
 			if (startResponse.eventType === 'RunLongRunningCommand') {
 				const { uniqueTaskId } = startResponse.data
 
-				while (this.ws.isConnected()) {
-					const payload = await this.ws.waitForNextFutureWebSocketEvent({
-						eventType: 'StreamLongRunningTaskEvent',
-						timeout: 30000
-					}) // TODO: check timeout
-
-					if (payload.eventType === 'StreamLongRunningTaskEvent') {
-						if (payload.uniqueTaskId !== uniqueTaskId) continue
-
-						const eventDetails = payload.eventDetails
-
-						if (eventDetails.type === 'io') {
-							if (eventDetails.stdout != null) {
-								options.onStdout?.(eventDetails.stdout)
-							}
-							if (eventDetails.stderr != null) {
-								options.onStderr?.(eventDetails.stderr)
-							}
-						} else if (eventDetails.type === 'close') {
-							const exitCode = eventDetails.code ?? 0 // TODO: check exit code - backend is sending null as fallback
-
-							if (eventDetails.error != null) {
-								throw new Error(eventDetails.error)
-							}
-							options.onClose?.(exitCode)
-
-							return
-						} else {
-              exhaustiveGuard(eventDetails)
-            }
+				await this.ws.addStreamingTaskHandler({
+					uniqueTaskId,
+					handler: {
+						onStdout: options.onStdout,
+						onStderr: options.onStderr,
+						onClose: options.onClose
 					}
-				}
+				})
 			} else {
 				throw new Error('Unexpected response event type')
 			}

@@ -46,8 +46,7 @@ const containerDetailsSchema = z.object({
 const getRunningPlaygroundSessionDetailsOutputSchema = z.object({
 	response: z.union([
 		z.object({
-			isWaitingForUpscale: z.literal(true),
-			shouldSendBackWaitingForUpscaleValueAs: z.boolean()
+			isWaitingForUpscale: z.literal(true)
 		}),
 		z.object({
 			isWaitingForUpscale: z.literal(false),

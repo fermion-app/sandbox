@@ -44,8 +44,22 @@ export class SandboxWebSocket {
 	private connectionState: 'disconnected' | 'connecting' | 'connected' = 'disconnected'
 	private shouldAutoReconnect = true
 	private healthPingTimeoutId: NodeJS.Timeout | null = null
+	private streamingTaskHandlers = new Map<
+		string,
+		{
+			onStdout?: (stdout: string) => void
+			onStderr?: (stderr: string) => void
+			onClose?: (exitCode: number) => void
+		}
+	>()
 
-	constructor(url: string, token: string) {
+	constructor({
+		url,
+		token,
+	}: {
+		url: string
+		token: string
+	}) {
 		this.url = url
 		this.token = token
 	}
@@ -138,6 +152,16 @@ export class SandboxWebSocket {
 		return deferredPromise.promise
 	}
 
+	async addStreamingTaskHandler({ uniqueTaskId, handler }: {
+	uniqueTaskId: string
+	handler: {
+		onStdout?: (stdout: string) => void
+		onStderr?: (stderr: string) => void
+		onClose?: (exitCode: number) => void }
+}): Promise<void> {
+		this.streamingTaskHandlers.set(uniqueTaskId, handler)
+	}
+
 	disconnect(): void {
 		this.shouldAutoReconnect = false
 		this.cleanDirtyWebSocketIfPresent()
@@ -187,23 +211,42 @@ export class SandboxWebSocket {
 
 	private onMessage(rawData: string): void {
 		const message = JSON.parse(rawData)
-
 		const { messageId, payload } = message
 
-		const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId)
-		if (pendingMessage != null) {
-			clearTimeout(pendingMessage.timeoutId)
-			pendingMessage.deferredPromise.resolve?.(payload)
-			this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
-			return
-		}
+		if (payload.eventType === 'StreamLongRunningTaskEvent') {
+			const { uniqueTaskId, eventDetails } = payload
+			const handler = this.streamingTaskHandlers.get(uniqueTaskId)
 
-		const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType)
-		if (eventWaiter != null) {
-			clearTimeout(eventWaiter.timeoutId)
-			eventWaiter.deferredPromise.resolve?.(payload)
-			this.waitQueueToEventTypePromiseMapping.delete(payload.eventType)
-			return
+			if (handler != null) {
+				if (eventDetails.type === 'io') {
+
+					if (eventDetails.stdout != null) {
+						handler.onStdout?.(eventDetails.stdout)
+					}
+					if (eventDetails.stderr != null) {
+						handler.onStderr?.(eventDetails.stderr)
+					}
+
+				} else if (eventDetails.type === 'close') {
+					handler.onClose?.(eventDetails.code)
+					this.streamingTaskHandlers.delete(uniqueTaskId)
+				}
+			}
+		} else {
+			const pendingMessage = this.messageIdToWebSocketResponsePromiseMapping.get(messageId)
+			if (pendingMessage != null) {
+				clearTimeout(pendingMessage.timeoutId)
+				pendingMessage.deferredPromise.resolve?.(payload)
+				this.messageIdToWebSocketResponsePromiseMapping.delete(messageId)
+				return
+			}
+
+			const eventWaiter = this.waitQueueToEventTypePromiseMapping.get(payload.eventType)
+			if (eventWaiter != null) {
+				clearTimeout(eventWaiter.timeoutId)
+				eventWaiter.deferredPromise.resolve?.(payload)
+				this.waitQueueToEventTypePromiseMapping.delete(payload.eventType)
+			}
 		}
 	}
 
