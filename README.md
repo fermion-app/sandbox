@@ -113,7 +113,7 @@ console.log(result.stdout)
 console.log(result.stderr)
 ```
 
-#### `runStreamingCommand(options): Promise<void>`
+#### `runStreamingCommand(options): Promise<{stdout: string, stderr: string, exitCode: number}>`
 
 Executes a long-running command with streaming output.
 
@@ -123,21 +123,20 @@ Executes a long-running command with streaming output.
 - `options.cmd` (string, required): Command to execute
 - `options.args` (string[], required): Command arguments
 - `options.stdin` (string, optional): Standard input to pipe to the command
-- `options.onStdout` ((data: string) => void, optional): Callback for stdout chunks
-- `options.onStderr` ((data: string) => void, optional): Callback for stderr chunks
-- `options.onClose` ((exitCode: number) => void, optional): Callback when command exits
+- `options.onStdout` ((data: string) => void, optional): Callback for stdout chunks as they arrive
+- `options.onStderr` ((data: string) => void, optional): Callback for stderr chunks as they arrive
 
-**Returns:** `Promise<void>` - Resolves when command starts (not when it finishes)
+**Returns:** `Promise<{stdout: string, stderr: string, exitCode: number}>` - Resolves when command completes with accumulated output and exit code
 
 **Example:**
 ```typescript
-await sandbox.runStreamingCommand({
+const {stdout, stderr, exitCode} = await sandbox.runStreamingCommand({
   cmd: 'npm',
-  args: ['install'],
-  onStdout: (data) => console.log('OUT:', data),
-  onStderr: (data) => console.error('ERR:', data),
-  onClose: (code) => console.log('Exit code:', code)
+  args: ['install', 'express'],
+  onStdout: (data) => console.log(data.trim()),
+  onStderr: (data) => console.log(data.trim())
 })
+console.log('Exit code:', exitCode)
 ```
 
 #### `getFile(path: string): Promise<ArrayBuffer>`
@@ -313,14 +312,12 @@ const sandbox = await Sandbox.create({
 })
 
 // Install dependencies with streaming output
-await sandbox.runStreamingCommand({
+const { exitCode } = await sandbox.runStreamingCommand({
   cmd: 'npm',
   args: ['install'],
-  onStdout: (data) => process.stdout.write(data),
-  onClose: (code) => {
-    if (code === 0) console.log('✓ Dependencies installed')
-  }
+  onStdout: (data) => process.stdout.write(data)
 })
+if (exitCode === 0) console.log('✓ Dependencies installed')
 
 // Run build
 const buildResult = await sandbox.runCommand({

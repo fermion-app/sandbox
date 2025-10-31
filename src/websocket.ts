@@ -245,7 +245,7 @@ export class SandboxWebSocket {
 		const existing = this.waitQueueToEventTypePromiseMapping.get(eventType)
 		if (existing != null) {
 			existing.deferredPromise.reject?.(new Error('Replaced by new wait'))
-		}
+		} // TODO: check if we need to throw here instead
 
 		this.waitQueueToEventTypePromiseMapping.set(eventType, {
 			deferredPromise,
@@ -405,7 +405,7 @@ export class SandboxWebSocket {
 		this.cleanDirtyWebSocketIfPresent()
 
 		if (this.shouldAutoReconnect) {
-			await new Promise(resolve => setTimeout(resolve, 2000)) // TODO: check timeout
+			await new Promise(resolve => setTimeout(resolve, 2000)) // TODO: is this required?
 			try {
 				await this.connect()
 			} catch (error) {

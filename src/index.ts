@@ -101,15 +101,12 @@ export class Sandbox {
 	 */
 	constructor({
 		gitRepoUrl,
-		shouldBackupFilesystem,
 		apiKey
 	}: {
 		gitRepoUrl?: string
-		shouldBackupFilesystem?: boolean
 		apiKey: string
 	}) {
 		this.gitRepoUrl = gitRepoUrl ?? ''
-		this.shouldBackupFilesystem = shouldBackupFilesystem ?? false
 		this.apiKey = apiKey
 	}
 
@@ -144,13 +141,13 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async connect(): Promise<void> {
+	async connect(shouldBackupFilesystem: boolean = false): Promise<void> {
 		const api = new ApiClient(this.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
 			bootParams: {
 				source: 'empty',
-				shouldBackupFilesystem: this.shouldBackupFilesystem ?? false
+				shouldBackupFilesystem
 			}
 		})
 
@@ -195,7 +192,7 @@ export class Sandbox {
 				if (this.containerDetails != null) {
 					if (this.isConnected()) {
 						throw new Error('WebSocket already connected')
-					}
+					} // TODO: check if we need to throw here
 					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 
 					this.ws = new SandboxWebSocket({
@@ -211,18 +208,14 @@ export class Sandbox {
 				}
 
 				if (this.gitRepoUrl != null && this.gitRepoUrl !== '') {
-					await new Promise<void>(resolve => {
-						void this.runStreamingCommand({
-							cmd: 'git',
-							args: ['clone', this.gitRepoUrl!],
-							onStdout: data => console.log(data.trim()),
-							onStderr: data => console.log(data.trim()),
-							onClose: exitCode => {
-								console.log(`Git clone completed with exit code: ${exitCode}`)
-								resolve()
-							}
-						})
+					const gitRepoUrl = this.gitRepoUrl
+					const { exitCode } = await this.runStreamingCommand({
+						cmd: 'git',
+						args: ['clone', gitRepoUrl],
+						onStdout: data => console.log(data.trim()),
+						onStderr: data => console.log(data.trim())
 					})
+					console.log(`Git clone completed with exit code: ${exitCode}`)
 				}
 				return
 			}
@@ -345,7 +338,7 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async setFile({
+	async writeFile({
 		path,
 		content
 	}: {
@@ -380,29 +373,30 @@ export class Sandbox {
 	 *
 	 * @remarks
 	 * Use this for commands that produce continuous output (e.g., build processes, servers, watchers).
-	 * Callbacks are invoked as data arrives. The promise resolves immediately after the command starts,
-	 * not when it finishes.
+	 * Callbacks are invoked as data arrives. The promise resolves when the command completes,
+	 * returning the accumulated output and exit code.
 	 *
 	 * @param options - Command execution options
 	 * @param options.cmd - Command to execute (e.g., 'npm', 'git', 'node')
 	 * @param options.args - Command arguments as array
 	 * @param options.stdin - Optional standard input to send to the command
-	 * @param options.onStdout - Callback for stdout data chunks
-	 * @param options.onStderr - Callback for stderr data chunks
-	 * @param options.onClose - Callback when command exits with exit code
+	 * @param options.onStdout - Optional callback for stdout data chunks as they arrive
+	 * @param options.onStderr - Optional callback for stderr data chunks as they arrive
+	 *
+	 * @returns Promise that resolves when command completes with stdout, stderr, and exitCode
 	 *
 	 * @throws {Error} If WebSocket is not connected
 	 * @throws {Error} If command execution fails to start
 	 *
 	 * @example
 	 * ```typescript
-	 * await sandbox.runStreamingCommand({
+	 * const {stdout, stderr, exitCode} = await sandbox.runStreamingCommand({
 	 *   cmd: 'npm',
-	 *   args: ['install'],
-	 *   onStdout: (data) => console.log('OUT:', data),
-	 *   onStderr: (data) => console.error('ERR:', data),
-	 *   onClose: (code) => console.log('Exit code:', code)
+	 *   args: ['install', 'express'],
+	 *   onStdout: (data) => console.log(data.trim()),
+	 *   onStderr: (data) => console.log(data.trim())
 	 * })
+	 * console.log('Exit code:', exitCode)
 	 * ```
 	 *
 	 * @public
@@ -413,8 +407,11 @@ export class Sandbox {
 		stdin?: string
 		onStdout?: (stdout: string) => void
 		onStderr?: (stderr: string) => void
-		onClose?: (exitCode: number) => void
-	}): Promise<void> {
+	}): Promise<{
+		stdout: string
+		stderr: string
+		exitCode: number
+	}> {
 		if (this.ws != null) {
 			const startResponse = await this.ws.send({
 				payload: {
@@ -430,13 +427,26 @@ export class Sandbox {
 			if (startResponse.eventType === 'RunLongRunningCommand') {
 				const { uniqueTaskId } = startResponse.data
 
-				this.ws.addStreamingTaskHandler({
-					uniqueTaskId,
-					handler: {
-						onStdout: options.onStdout,
-						onStderr: options.onStderr,
-						onClose: options.onClose
-					}
+				return new Promise((resolve) => {
+					let stdout = ''
+					let stderr = ''
+
+					this.ws?.addStreamingTaskHandler({
+						uniqueTaskId,
+						handler: {
+							onStdout: (data) => {
+								stdout += data
+								options.onStdout?.(data)
+							},
+							onStderr: (data) => {
+								stderr += data
+								options.onStderr?.(data)
+							},
+							onClose: (exitCode) => {
+								resolve({ stdout, stderr, exitCode })
+							}
+						}
+					})
 				})
 			} else {
 				throw new Error('Unexpected response event type')
@@ -567,12 +577,12 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async exportPort(port: 3000 | 1337 | 1338): Promise<string> {
-		if (this.containerDetails == null) {
+	async exposePort(port: 3000 | 1337 | 1338): Promise<string> {
+		if (this.containerDetails != null) {
+			return `https://${this.containerDetails.subdomain}-${port}.run-code.com`
+		} else {
 			throw new Error('No container found')
 		}
-
-		return `https://${this.containerDetails.subdomain}-${port}.run-code.com`
 	}
 
 	/**
@@ -601,14 +611,15 @@ export class Sandbox {
 	 * @public
 	 */
 	getPublicUrls(): { 3000: string; 1337: string; 1338: string } {
-		if (this.containerDetails == null) {
+		if (this.containerDetails != null) {
+			return {
+				3000: `https://${this.containerDetails.subdomain}-3000.run-code.com`,
+				1337: `https://${this.containerDetails.subdomain}-1337.run-code.com`,
+				1338: `https://${this.containerDetails.subdomain}-1338.run-code.com`
+			}
+		} else {
 			throw new Error('No container found')
 		}
 
-		return {
-			3000: `https://${this.containerDetails.subdomain}-3000.run-code.com`,
-			1337: `https://${this.containerDetails.subdomain}-1337.run-code.com`,
-			1338: `https://${this.containerDetails.subdomain}-1338.run-code.com`
-		}
 	}
 }

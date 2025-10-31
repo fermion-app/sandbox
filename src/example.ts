@@ -36,32 +36,24 @@ async function main() {
 		console.log('Project name:', packageJson.name)
 
 		// Install dependencies
-		await new Promise<void>((resolve) => {
-			sandbox.runStreamingCommand({
-				cmd: 'bash',
-				args: ['-c', 'cd /home/damner/code/perpetual-trading && pnpm install'],
-				onStdout: (data) => process.stdout.write(data),
-				onStderr: (data) => process.stderr.write(data),
-				onClose: (code) => {
-					console.log('Installation finished with code:', code)
-					resolve()
-				}
-			})
+		const { exitCode } = await sandbox.runStreamingCommand({
+			cmd: 'bash',
+			args: ['-c', 'cd /home/damner/code/perpetual-trading && pnpm install'],
+			onStdout: (data) => process.stdout.write(data),
+			onStderr: (data) => process.stderr.write(data)
 		})
+		console.log('Installation finished with code:', exitCode)
 
 		// Create and run a test file
-		await sandbox.setFile({
+		await sandbox.writeFile({
 			path: '/home/damner/code/perpetual-trading/test.js',
 			content: 'console.log("Hello from sandbox")'
 		})
 
-		await new Promise<void>((resolve) => {
-			sandbox.runStreamingCommand({
-				cmd: 'node',
-				args: ['/home/damner/code/perpetual-trading/test.js'],
-				onStdout: (data) => console.log(data.trim()),
-				onClose: () => resolve()
-			})
+		await sandbox.runStreamingCommand({
+			cmd: 'node',
+			args: ['/home/damner/code/perpetual-trading/test.js'],
+			onStdout: (data) => console.log(data.trim())
 		})
 
 	} finally {
