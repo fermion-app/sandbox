@@ -14,13 +14,12 @@ async function main() {
 
 	// Create sandbox instance
 	const sandbox = new Sandbox({
-		apiKey,
-		gitRepoUrl: 'https://github.com/gautamtayal1/perpetual-trading'
+		apiKey
 	})
 
 	try {
 		// Connect and wait for repository to clone
-		await sandbox.connect()
+		await sandbox.connect({shouldBackupFilesystem: true, gitRepoUrl: "https://github.com/gautamtayal1/perpetual-trading"})
 		console.log('Connected to sandbox')
 
 		// List cloned files

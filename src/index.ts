@@ -125,13 +125,10 @@ export class Sandbox {
 	 * @public
 	 */
 	constructor({
-		gitRepoUrl,
 		apiKey
 	}: {
-		gitRepoUrl?: string
 		apiKey: string
 	}) {
-		this.gitRepoUrl = gitRepoUrl ?? ''
 		this.apiKey = apiKey
 	}
 
@@ -166,7 +163,13 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async connect(shouldBackupFilesystem: boolean = false): Promise<void> {
+	async connect({ 
+		shouldBackupFilesystem = false, 
+		gitRepoUrl 
+	}: { 
+		shouldBackupFilesystem: boolean; 
+		gitRepoUrl?: string 
+	}): Promise<void> {
 		const api = new ApiClient(this.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
@@ -232,8 +235,7 @@ export class Sandbox {
 					})
 				}
 
-				if (this.gitRepoUrl != null && this.gitRepoUrl !== '') {
-					const gitRepoUrl = this.gitRepoUrl
+				if (gitRepoUrl != null && this.gitRepoUrl !== '') {
 					const { exitCode } = await this.runStreamingCommand({
 						cmd: 'git',
 						args: ['clone', gitRepoUrl],
@@ -269,7 +271,7 @@ export class Sandbox {
 	 * @public
 	 */
 	async disconnect(): Promise<void> {
-		this.ws?.shouldWsAutoReconnect()
+		this.ws?.disableWsAutoReconnect()
 		
 		if (this.containerDetails != null) {
 			const url = new URL(

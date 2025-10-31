@@ -313,7 +313,7 @@ export class SandboxWebSocket {
 		this.cleanDirtyWebSocketIfPresent()
 	}
 
-	async shouldWsAutoReconnect() {
+	async disableWsAutoReconnect() {
 		this.shouldAutoReconnect = false
 	}
 
