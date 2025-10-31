@@ -14,6 +14,31 @@ function exhaustiveGuard(_value: never): never {
 }
 
 /**
+ * Normalizes file paths for the sandbox environment
+ * - Expands ~ to /home/damner/code
+ * - Validates that path starts with either ~ or /home/damner/code
+ * @internal
+ * @param path - The input path (must start with ~ or /home/damner/code)
+ * @returns Normalized path
+ * @throws {Error} If path doesn't start with ~ or /home/damner/code
+ */
+function normalizePath(path: string): string {
+	let normalizedPath
+
+	if (path.startsWith('~')) {
+		normalizedPath = path.replace(/^~/, '/home/damner/code')
+	} else if (path.startsWith('/home/damner/code')) {
+		normalizedPath = path
+	} else {
+			throw new Error(
+			`Path must start with ~ or /home/damner/code. Got: "${path}".`
+		)
+	}
+	
+	return normalizedPath
+}
+
+/**
  * Main Sandbox class for managing code execution containers
  *
  * @remarks
@@ -263,22 +288,23 @@ export class Sandbox {
 	/**
 	 * Retrieves a file from the container filesystem
 	 *
-	 * @param path - Absolute path to the file in the container
+	 * @param path - Path to the file. Use ~ for home directory (e.g., "~/file.js") or absolute paths
 	 * @returns Response object - use .text(), .arrayBuffer(), .blob(), etc.
 	 *
 	 * @throws {Error} If file is not found (404)
 	 * @throws {Error} If container is not initialized
 	 * @throws {Error} If fetch fails
+	 * @throws {Error} If path is not absolute (after ~ expansion)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Get as text
-	 * const response = await sandbox.getFile('/home/user/output.txt')
+	 * // Get as text with tilde expansion
+	 * const response = await sandbox.getFile('~/output.txt')
 	 * const text = await response.text()
 	 * console.log(text)
 	 *
-	 * // Get as buffer
-	 * const response = await sandbox.getFile('/home/user/data.bin')
+	 * // Get with absolute path
+	 * const response = await sandbox.getFile('/home/damner/code/data.bin')
 	 * const buffer = await response.arrayBuffer()
 	 * ```
 	 *
@@ -286,10 +312,12 @@ export class Sandbox {
 	 */
 	async getFile(path: string): Promise<Response> {
 		if (this.containerDetails != null) {
+			const normalizedPath = normalizePath(path)
+
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', path)
+			url.searchParams.append('full-path', normalizedPath)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -299,7 +327,7 @@ export class Sandbox {
 
 			if (!response.ok) {
 				if (response.status === 404) {
-					throw new Error(`File not found: ${path}`)
+					throw new Error(`File not found: ${normalizedPath}`)
 				}
 				throw new Error(`Failed to get file: ${response.statusText}`)
 			}
@@ -314,25 +342,25 @@ export class Sandbox {
 	 * Writes a file to the container filesystem
 	 *
 	 * @param options - File write options
-	 * @param options.path - Absolute path where the file should be written
+	 * @param options.path - Path where the file should be written. Use ~ for home directory (e.g., "~/script.js") or absolute paths
 	 * @param options.content - File content as string or ArrayBuffer
 	 *
 	 * @throws {Error} If container is not initialized
 	 * @throws {Error} If write operation fails
+	 * @throws {Error} If path is not absolute (after ~ expansion)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Write text file
-	 * await sandbox.setFile({
-	 *   path: '/home/user/script.js',
+	 * // Write text file with tilde expansion
+	 * await sandbox.writeFile({
+	 *   path: '~/script.js',
 	 *   content: 'console.log("Hello")'
 	 * })
 	 *
-	 * // Write binary file
-	 * const buffer = new Uint8Array([1, 2, 3, 4]).buffer
-	 * await sandbox.setFile({
-	 *   path: '/home/user/data.bin',
-	 *   content: buffer
+	 * // Write with absolute path
+	 * await sandbox.writeFile({
+	 *   path: '/home/damner/code/data.bin',
+	 *   content: new Uint8Array([1, 2, 3, 4]).buffer
 	 * })
 	 * ```
 	 *
@@ -346,10 +374,12 @@ export class Sandbox {
 		content: string | ArrayBuffer
 	}): Promise<void> {
 		if (this.containerDetails != null) {
+			const normalizedPath = normalizePath(path)
+
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', path)
+			url.searchParams.append('full-path', normalizedPath)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
