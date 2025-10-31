@@ -276,7 +276,7 @@ export class Sandbox {
 				this.containerDetails.playgroundContainerAccessToken
 			)
 
-			const response = await fetch(url, { method: 'GET' })
+			await fetch(url, { method: 'GET' })
 		}
 
 		this.ws?.disconnect()
