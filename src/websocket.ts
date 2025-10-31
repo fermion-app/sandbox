@@ -231,15 +231,13 @@ export class SandboxWebSocket {
 	 *
 	 * @public
 	 */
-	waitForNextFutureWebSocketEvent(
-		{
-			eventType,
-			timeout = 30000
-		}: {
-			eventType: string
-			timeout?: number
-		}
-	): Promise<WebSocketResponsePayload> {
+	waitForNextFutureWebSocketEvent({
+		eventType,
+		timeout = 30000
+	}: {
+		eventType: string
+		timeout?: number
+	}): Promise<WebSocketResponsePayload> {
 		const deferredPromise = new DeferredPromise<WebSocketResponsePayload>()
 
 		const existing = this.waitQueueToEventTypePromiseMapping.get(eventType)

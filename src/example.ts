@@ -19,7 +19,10 @@ async function main() {
 
 	try {
 		// Connect and wait for repository to clone
-		await sandbox.connect({shouldBackupFilesystem: true, gitRepoUrl: "https://github.com/gautamtayal1/perpetual-trading"})
+		await sandbox.connect({
+			shouldBackupFilesystem: true,
+			gitRepoUrl: 'https://github.com/gautamtayal1/perpetual-trading'
+		})
 		console.log('Connected to sandbox')
 
 		// List cloned files
@@ -38,8 +41,8 @@ async function main() {
 		const { exitCode } = await sandbox.runStreamingCommand({
 			cmd: 'bash',
 			args: ['-c', 'cd /home/damner/code/perpetual-trading && pnpm install'],
-			onStdout: (data) => process.stdout.write(data),
-			onStderr: (data) => process.stderr.write(data)
+			onStdout: data => process.stdout.write(data),
+			onStderr: data => process.stderr.write(data)
 		})
 		console.log('Installation finished with code:', exitCode)
 
@@ -52,9 +55,8 @@ async function main() {
 		await sandbox.runStreamingCommand({
 			cmd: 'node',
 			args: ['/home/damner/code/perpetual-trading/test.js'],
-			onStdout: (data) => console.log(data.trim())
+			onStdout: data => console.log(data.trim())
 		})
-
 	} finally {
 		// Always disconnect to clean up resources
 		await sandbox.disconnect()

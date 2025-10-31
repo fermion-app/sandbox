@@ -30,11 +30,9 @@ function normalizePath(path: string): string {
 	} else if (path.startsWith('/home/damner/code')) {
 		normalizedPath = path
 	} else {
-			throw new Error(
-			`Path must start with ~ or /home/damner/code. Got: "${path}".`
-		)
+		throw new Error(`Path must start with ~ or /home/damner/code. Got: "${path}".`)
 	}
-	
+
 	return normalizedPath
 }
 
@@ -124,11 +122,7 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	constructor({
-		apiKey
-	}: {
-		apiKey: string
-	}) {
+	constructor({ apiKey }: { apiKey: string }) {
 		this.apiKey = apiKey
 	}
 
@@ -163,12 +157,12 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async connect({ 
-		shouldBackupFilesystem = false, 
-		gitRepoUrl 
-	}: { 
-		shouldBackupFilesystem: boolean; 
-		gitRepoUrl?: string 
+	async connect({
+		shouldBackupFilesystem = false,
+		gitRepoUrl
+	}: {
+		shouldBackupFilesystem: boolean
+		gitRepoUrl?: string
 	}): Promise<void> {
 		const api = new ApiClient(this.apiKey)
 
@@ -272,7 +266,7 @@ export class Sandbox {
 	 */
 	async disconnect(): Promise<void> {
 		this.ws?.disableWsAutoReconnect()
-		
+
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/disconnect-sandbox`
@@ -281,7 +275,7 @@ export class Sandbox {
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
 			)
-			
+
 			const response = await fetch(url, { method: 'GET' })
 		}
 
@@ -461,22 +455,22 @@ export class Sandbox {
 			if (startResponse.eventType === 'RunLongRunningCommand') {
 				const { uniqueTaskId } = startResponse.data
 
-				return new Promise((resolve) => {
+				return new Promise(resolve => {
 					let stdout = ''
 					let stderr = ''
 
 					this.ws?.addStreamingTaskHandler({
 						uniqueTaskId,
 						handler: {
-							onStdout: (data) => {
+							onStdout: data => {
 								stdout += data
 								options.onStdout?.(data)
 							},
-							onStderr: (data) => {
+							onStderr: data => {
 								stderr += data
 								options.onStderr?.(data)
 							},
-							onClose: (exitCode) => {
+							onClose: exitCode => {
 								resolve({ stdout, stderr, exitCode })
 							}
 						}
