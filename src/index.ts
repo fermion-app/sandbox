@@ -269,9 +269,8 @@ export class Sandbox {
 	 * @public
 	 */
 	async disconnect(): Promise<void> {
-		this.ws?.disconnect()
-		this.ws = null
-
+		this.ws?.shouldWsAutoReconnect()
+		
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/disconnect-sandbox`
@@ -280,9 +279,12 @@ export class Sandbox {
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
 			)
-
-			await fetch(url, { method: 'GET' })
+			
+			const response = await fetch(url, { method: 'GET' })
 		}
+
+		this.ws?.disconnect()
+		this.ws = null
 	}
 
 	/**
@@ -650,6 +652,5 @@ export class Sandbox {
 		} else {
 			throw new Error('No container found')
 		}
-
 	}
 }

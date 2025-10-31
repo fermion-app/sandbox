@@ -310,8 +310,11 @@ export class SandboxWebSocket {
 	 * @public
 	 */
 	disconnect(): void {
-		this.shouldAutoReconnect = false
 		this.cleanDirtyWebSocketIfPresent()
+	}
+
+	async shouldWsAutoReconnect() {
+		this.shouldAutoReconnect = false
 	}
 
 	/**
