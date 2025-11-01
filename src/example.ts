@@ -1,21 +1,9 @@
 import { Sandbox } from './index'
 
-/**
- * Example: Working with a real repository
- *
- * This example demonstrates:
- * - Creating a sandbox and cloning a repository
- * - Reading and writing files
- * - Running commands (both quick and streaming)
- * - Installing dependencies
- */
 async function main() {
-	const apiKey = ''
 
 	// Create sandbox instance
-	const sandbox = new Sandbox({
-		apiKey
-	})
+	const sandbox = new Sandbox({ apiKey: 'your-api-key-here' })
 
 	try {
 		// Connect and wait for repository to clone
@@ -58,8 +46,6 @@ async function main() {
 			args: ['/home/damner/code/perpetual-trading/test.js'],
 			onStdout: data => console.log(data.trim())
 		})
-
-		await new Promise(resolve => setTimeout(resolve, 10000))
 	} finally {
 		// Always disconnect to clean up resources
 		await sandbox.disconnect()

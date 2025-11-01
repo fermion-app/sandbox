@@ -1,6 +1,6 @@
 # @fermion-app/sandbox
 
-Secure isolated code execution SDK for Node.js. Run untrusted code, build projects, or host services in ephemeral containers.
+Secure isolated code execution SDK. Run untrusted code, build projects, or host services in ephemeral containers.
 
 ## Installation
 
@@ -143,32 +143,6 @@ const url = await sandbox.exposePort(3000)
 console.log(`App running at: ${url}`)
 ```
 
-### Process Files
-
-```typescript
-// Upload input
-await sandbox.writeFile({
-  path: '~/input.json',
-  content: JSON.stringify({ values: [1, 2, 3] })
-})
-
-// Process
-await sandbox.runCommand({
-  cmd: 'node',
-  args: ['-e', `
-    const fs = require('fs');
-    const data = JSON.parse(fs.readFileSync('input.json'));
-    const result = data.values.map(x => x * 2);
-    fs.writeFileSync('output.json', JSON.stringify(result));
-  `]
-})
-
-// Get result
-const response = await sandbox.getFile('~/output.json')
-const result = await response.json()
-console.log(result) // [2, 4, 6]
-```
-
 ## API Reference
 
 ### Constructor
@@ -198,24 +172,11 @@ Public URLs available for:
 - Port 1337
 - Port 1338
 
-## Error Handling
-
-```typescript
-try {
-  await sandbox.create({ shouldBackupFilesystem: false })
-} catch (error) {
-  if (error.message.includes('Provisioning timeout')) {
-    // Container took too long to start
-  }
-}
-```
-
 ## Development
 
 ```bash
 npm install    # Install dependencies
 npm run build  # Build the package
-npm test       # Run examples
 ```
 
 ## License
