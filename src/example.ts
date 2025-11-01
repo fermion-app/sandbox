@@ -1,7 +1,6 @@
 import { Sandbox } from './index'
 
 async function main() {
-
 	// Create sandbox instance
 	const sandbox = new Sandbox({ apiKey: 'your-api-key-here' })
 

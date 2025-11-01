@@ -32,8 +32,8 @@ const startPlaygroundSessionOutputSchema = z.object({
 				'can-terminate-and-get-new',
 				'can-create-account-and-get-new'
 			]),
-			isVpnFound: z.boolean(), // TODO: check if this is needed
-			isLimitExceeded: z.boolean() // TODO: check if this is needed
+			isVpnFound: z.boolean(),
+			isLimitExceeded: z.boolean()
 		})
 	])
 })

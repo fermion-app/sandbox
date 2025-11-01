@@ -243,7 +243,7 @@ export class SandboxWebSocket {
 		const existing = this.waitQueueToEventTypePromiseMapping.get(eventType)
 		if (existing != null) {
 			existing.deferredPromise.reject?.(new Error('Replaced by new wait'))
-		} // TODO: check if we need to throw here instead
+		}
 
 		this.waitQueueToEventTypePromiseMapping.set(eventType, {
 			deferredPromise,
@@ -361,11 +361,11 @@ export class SandboxWebSocket {
 					console.error('[SandboxWebSocket] Health ping failed', error)
 				})
 
-				this.healthPingTimeoutId = setTimeout(sendHealthPing, 10000) // TODO: check timeout
+				this.healthPingTimeoutId = setTimeout(sendHealthPing, 10000)
 			}
 		}
 
-		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000) // TODO: check timeout
+		this.healthPingTimeoutId = setTimeout(sendHealthPing, 5000)
 	}
 
 	private onMessage(rawData: string): void {
@@ -416,7 +416,7 @@ export class SandboxWebSocket {
 		this.cleanDirtyWebSocketIfPresent()
 
 		if (this.shouldAutoReconnect) {
-			await new Promise(resolve => setTimeout(resolve, 2000)) // TODO: is this required?
+			await new Promise(resolve => setTimeout(resolve, 2000))
 			try {
 				await this.connect()
 			} catch (error) {
@@ -448,7 +448,6 @@ export class SandboxWebSocket {
 		} catch (error) {
 			this.messagesData.push(message)
 			console.error('[SandboxWebSocket] Error sending message', error)
-			// TODO: throw maybe?
 		}
 	}
 

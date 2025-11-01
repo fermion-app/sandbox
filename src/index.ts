@@ -200,7 +200,7 @@ export class Sandbox {
 	 * @public
 	 */
 	async create({
-		shouldBackupFilesystem = false,
+		shouldBackupFilesystem,
 		gitRepoUrl
 	}: {
 		shouldBackupFilesystem: boolean
@@ -256,7 +256,7 @@ export class Sandbox {
 				if (this.containerDetails != null) {
 					if (this.isConnected()) {
 						throw new Error('WebSocket already connected')
-					} // TODO: check if we need to throw here
+					}
 					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 
 					this.ws = new SandboxWebSocket({
@@ -365,7 +365,7 @@ export class Sandbox {
 				if (this.containerDetails != null) {
 					if (this.isConnected()) {
 						throw new Error('WebSocket already connected')
-					} // TODO: check if we need to throw here
+					}
 					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 					this.ws = new SandboxWebSocket({
 						url: wsUrl,
