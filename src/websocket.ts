@@ -311,6 +311,16 @@ export class SandboxWebSocket {
 		this.cleanDirtyWebSocketIfPresent()
 	}
 
+	/**
+	 * Disables automatic WebSocket reconnection
+	 *
+	 * @remarks
+	 * Call this before disconnecting if you don't want the WebSocket to
+	 * automatically attempt to reconnect after a disconnect. This is useful
+	 * when intentionally shutting down the connection.
+	 *
+	 * @internal
+	 */
 	async disableWsAutoReconnect() {
 		this.shouldAutoReconnect = false
 	}

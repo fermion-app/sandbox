@@ -1,10 +1,20 @@
 {
 	"name": "@fermion-app/sandbox",
-	"version": "1.0.0",
-	"description": "Code Execution Sandbox SDK",
-	"main": "dist/index.js",
+	"version": "0.1.0",
+	"description": "Secure isolated code execution sandbox SDK",
+	"main": "dist/index.cjs",
+	"module": "dist/index.js",
 	"types": "dist/index.d.ts",
-	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"require": "./dist/index.cjs",
+			"import": "./dist/index.js"
+		}
+	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "tsx src/build.ts",
 		"test": "tsx src/example.ts",
@@ -14,6 +24,19 @@
 		"clean": "rm -rf dist",
 		"pretty": "prettier --write \"**/*.{ts,tsx,json,yml,yaml}\" --log-level warn"
 	},
+	"repository": {
+  "type": "git",
+  "url": "https://github.com/fermion-app/sandbox.git"
+  },
+	"bugs": {
+  "url": "https://github.com/fermion-app/sandbox/issues"
+	},
+	"homepage": "https://docs.fermion.app/",
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"keywords": [
 		"code-execution",
 		"sandbox",

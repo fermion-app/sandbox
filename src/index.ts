@@ -37,32 +37,73 @@ function normalizePath(path: string): string {
 }
 
 /**
- * Main Sandbox class for managing code execution containers
+ * Main Sandbox class for managing isolated code execution containers
  *
  * @remarks
- * This class provides a high-level interface to create, manage, and interact with
- * isolated code execution environments. It handles container provisioning,
- * WebSocket connections, file operations, and command execution.
+ * The Sandbox class provides a complete interface for creating, managing, and interacting with
+ * secure, isolated code execution environments. Each sandbox runs in a containerized environment
+ * with its own filesystem, process space, and network isolation. Sandboxes support real-time
+ * command execution, file operations, and web server hosting.
+ *
+ * Key features:
+ * - Isolated Linux containers for secure code execution
+ * - Real-time WebSocket communication for streaming output
+ * - File system operations (read/write)
+ * - Git repository cloning during initialization
+ * - Public URL exposure for web servers (ports 3000, 1337, 1338)
+ * - Persistent filesystem snapshots (optional)
  *
  * @example
  * ```typescript
- * // Create and connect to a new sandbox
- * const sandbox = new Sandbox({
- *   apiKey: 'your-api-key',
- *   gitRepoUrl: 'https://github.com/user/repo.git',
- *   shouldBackupFilesystem: true
- * })
- * await sandbox.connect()
+ * // Basic usage - create and connect to a new sandbox
+ * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+ * await sandbox.create({ shouldBackupFilesystem: false })
  *
- * // Run commands
+ * // Run a simple command
  * const result = await sandbox.runCommand({
  *   cmd: 'node',
  *   args: ['--version']
  * })
- * console.log(result.stdout)
+ * console.log('Node version:', result.stdout)
  *
- * // Clean up
+ * // Write and execute a file
+ * await sandbox.writeFile({
+ *   path: '~/hello.js',
+ *   content: 'console.log("Hello from sandbox!")'
+ * })
+ * const output = await sandbox.runCommand({
+ *   cmd: 'node',
+ *   args: ['hello.js']
+ * })
+ *
+ * // Clean up when done
  * await sandbox.disconnect()
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Advanced usage with git repository
+ * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+ * await sandbox.create({
+ *   gitRepoUrl: 'https://github.com/user/repo.git',
+ *   shouldBackupFilesystem: true
+ * })
+ *
+ * // Install dependencies with streaming output
+ * await sandbox.runStreamingCommand({
+ *   cmd: 'npm',
+ *   args: ['install'],
+ *   onStdout: (data) => process.stdout.write(data),
+ *   onStderr: (data) => process.stderr.write(data)
+ * })
+ *
+ * // Start a web server and get public URL
+ * sandbox.runStreamingCommand({
+ *   cmd: 'npm',
+ *   args: ['start']
+ * })
+ * const url = await sandbox.exposePort(3000)
+ * console.log('Server available at:', url)
  * ```
  *
  * @public
@@ -90,28 +131,23 @@ export class Sandbox {
 	 * Creates a new Sandbox instance
 	 *
 	 * @remarks
-	 * This constructor initializes the sandbox with configuration but does not
-	 * establish a connection. Call connect() after construction to provision
-	 * the container and establish the connection.
+	 * This constructor initializes the sandbox client with your API key.
+	 * After construction, call either create() to provision a new container
+	 * or fromSnippet() to connect to an existing playground snippet.
 	 *
 	 * @param options - Configuration options
-	 * @param options.apiKey - API key for authentication with the sandbox service (required)
-	 * @param options.gitRepoUrl - Optional git repository URL to clone during connection
-	 * @param options.shouldBackupFilesystem - Whether to persist filesystem changes after shutdown (default: false)
+	 * @param options.apiKey - API key for authentication with the Fermion sandbox service (required)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Basic sandbox
+	 * // Initialize sandbox client
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
-	 * await sandbox.connect()
 	 *
-	 * // With git repository
-	 * const sandbox = new Sandbox({
-	 *   apiKey: 'your-api-key',
-	 *   gitRepoUrl: 'https://github.com/user/repo.git',
-	 *   shouldBackupFilesystem: true
-	 * })
-	 * await sandbox.connect()
+	 * // Then create a new container
+	 * await sandbox.create({ shouldBackupFilesystem: false })
+	 *
+	 * // Or connect to existing snippet
+	 * await sandbox.fromSnippet('snippet-id-here')
 	 * ```
 	 *
 	 * @public
@@ -121,21 +157,26 @@ export class Sandbox {
 	}
 
 	/**
-	 * Connects to the sandbox and initializes the container
+	 * Creates a new sandbox container and establishes connection
 	 *
 	 * @remarks
-	 * This method provisions a new container and establishes a connection. It:
-	 * 1. Creates a playground snippet with the configured settings
-	 * 2. Starts a playground session
-	 * 3. Waits for container provisioning (polls until ready or timeout)
-	 * 4. Establishes WebSocket connection to the container
-	 * 5. Waits for container server to be ready
-	 * 6. Clones the git repository if configured
+	 * This method provisions a new container from scratch and establishes a WebSocket connection.
+	 * The process includes:
+	 * 1. Creating a new playground snippet with the specified settings
+	 * 2. Starting a playground session for that snippet
+	 * 3. Waiting for container provisioning (polls until ready or timeout)
+	 * 4. Establishing WebSocket connection to the container
+	 * 5. Waiting for container server to be ready
+	 * 6. Cloning the git repository if provided
 	 *
-	 * Call this method after constructing the Sandbox instance to establish
-	 * the connection and begin using the sandbox.
+	 * Use this method to create a fresh sandbox environment. For connecting to an
+	 * existing playground snippet, use fromSnippet() instead.
 	 *
-	 * @returns Promise that resolves when the sandbox is fully connected and ready
+	 * @param options - Container creation options
+	 * @param options.shouldBackupFilesystem - Whether to persist filesystem changes after shutdown (default: false)
+	 * @param options.gitRepoUrl - Optional git repository URL to clone after container is ready
+	 *
+	 * @returns Promise that resolves with the playground snippet ID when the sandbox is ready
 	 *
 	 * @throws {Error} If container provisioning times out (default: 30 seconds)
 	 * @throws {Error} If session creation fails or requires attention
@@ -144,9 +185,16 @@ export class Sandbox {
 	 *
 	 * @example
 	 * ```typescript
+	 * // Create basic sandbox
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
-	 * await sandbox.connect()
-	 * console.log('Sandbox ready!')
+	 * const snippetId = await sandbox.create({ shouldBackupFilesystem: false })
+	 * console.log('Created sandbox with snippet ID:', snippetId)
+	 *
+	 * // Create sandbox with git repository
+	 * const snippetId = await sandbox.create({
+	 *   shouldBackupFilesystem: true,
+	 *   gitRepoUrl: 'https://github.com/user/repo.git'
+	 * })
 	 * ```
 	 *
 	 * @public
@@ -241,6 +289,42 @@ export class Sandbox {
 		throw new Error('Provisioning timeout')
 	}
 
+	/**
+	 * Connects to an existing sandbox using a playground snippet ID
+	 *
+	 * @remarks
+	 * This method connects to an existing playground snippet that was previously created.
+	 * Use this to reconnect to a sandbox that has persistent filesystem enabled, or to
+	 * share sandbox environments between different sessions or users.
+	 *
+	 * The connection process includes:
+	 * 1. Starting a new session for the existing snippet
+	 * 2. Waiting for container provisioning
+	 * 3. Establishing WebSocket connection
+	 * 4. Waiting for container server to be ready
+	 *
+	 * @param playgroundSnippetId - The ID of an existing playground snippet
+	 *
+	 * @returns Promise that resolves when connected to the sandbox
+	 *
+	 * @throws {Error} If container provisioning times out (default: 30 seconds)
+	 * @throws {Error} If session creation fails or requires attention
+	 * @throws {Error} If the snippet ID is invalid or not found
+	 * @throws {Error} If WebSocket connection fails
+	 *
+	 * @example
+	 * ```typescript
+	 * // Connect to existing sandbox
+	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * await sandbox.fromSnippet('existing-snippet-id')
+	 *
+	 * // Now you can use the sandbox
+	 * const result = await sandbox.runCommand({ cmd: 'ls', args: ['-la'] })
+	 * console.log(result.stdout)
+	 * ```
+	 *
+	 * @public
+	 */
 	async fromSnippet(playgroundSnippetId: string) {
 		const api = new ApiClient(this.apiKey)
 		
@@ -630,32 +714,40 @@ export class Sandbox {
 	 * Gets the public URL for a specific port
 	 *
 	 * @remarks
-	 * The sandbox exposes certain ports publicly for running web servers and APIs.
+	 * The sandbox automatically exposes certain ports publicly for running web servers and APIs.
+	 * Any service running on these ports inside the container will be accessible via HTTPS.
 	 * Supported ports: 3000, 1337, 1338
 	 *
 	 * @param port - Port number (must be 3000, 1337, or 1338)
-	 * @returns Public HTTPS URL for the specified port
+	 * @returns Promise that resolves with the public HTTPS URL for the specified port
 	 *
 	 * @throws {Error} If container is not initialized
-	 * @throws {Error} If port is not supported
 	 *
 	 * @example
 	 * ```typescript
 	 * // Start a web server on port 3000
-	 * await sandbox.setFile({
-	 *   path: '/home/user/server.js',
+	 * await sandbox.writeFile({
+	 *   path: '~/server.js',
 	 *   content: `
 	 *     const http = require('http');
 	 *     http.createServer((req, res) => {
+	 *       res.writeHead(200, {'Content-Type': 'text/plain'});
 	 *       res.end('Hello World');
 	 *     }).listen(3000);
+	 *     console.log('Server running on port 3000');
 	 *   `
 	 * })
-	 * await sandbox.runCommand({ cmd: 'node', args: ['server.js'] })
+	 *
+	 * // Start the server in the background
+	 * sandbox.runStreamingCommand({
+	 *   cmd: 'node',
+	 *   args: ['server.js'],
+	 *   onStdout: (data) => console.log(data)
+	 * })
 	 *
 	 * // Get the public URL
-	 * const url = sandbox.getPublicUrl(3000)
-	 * console.log(`Server running at: ${url}`)
+	 * const url = await sandbox.exposePort(3000)
+	 * console.log(`Server accessible at: ${url}`)
 	 * // Output: https://abc123-3000.run-code.com
 	 * ```
 	 *
