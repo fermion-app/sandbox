@@ -77,12 +77,6 @@ export class Sandbox {
 	/** Container connection details including subdomain and access token */
 	private containerDetails: ContainerDetails | null = null
 
-	/** Git repository URL to clone on container initialization */
-	private gitRepoUrl: string | null = null
-
-	/** Whether to persist filesystem changes after container shutdown */
-	private shouldBackupFilesystem: boolean | null = null
-
 	/** API key for authentication with the sandbox service */
 	private apiKey: string | null = null
 
@@ -157,13 +151,13 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async connect({
+	async create({
 		shouldBackupFilesystem = false,
 		gitRepoUrl
 	}: {
 		shouldBackupFilesystem: boolean
 		gitRepoUrl?: string
-	}): Promise<void> {
+	}): Promise<string> {
 		const api = new ApiClient(this.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
@@ -229,7 +223,7 @@ export class Sandbox {
 					})
 				}
 
-				if (gitRepoUrl != null && this.gitRepoUrl !== '') {
+				if (gitRepoUrl != null && gitRepoUrl !== '') {
 					const { exitCode } = await this.runStreamingCommand({
 						cmd: 'git',
 						args: ['clone', gitRepoUrl],
@@ -237,6 +231,68 @@ export class Sandbox {
 						onStderr: data => console.log(data.trim())
 					})
 					console.log(`Git clone completed with exit code: ${exitCode}`)
+				}
+				return this.playgroundSnippetId
+			}
+
+			await new Promise(r => setTimeout(r, interval))
+		}
+
+		throw new Error('Provisioning timeout')
+	}
+
+	async fromSnippet(playgroundSnippetId: string) {
+		const api = new ApiClient(this.apiKey)
+		
+		const sessionData = await api.startPlaygroundSession({
+			playgroundSnippetId
+		})
+
+		if (sessionData.response.status === 'attention-needed') {
+			switch (sessionData.response.attentionType) {
+				case 'cannot-get-new':
+					throw new Error('Cannot get new session')
+				case 'can-terminate-and-get-new':
+					throw new Error('Can terminate and get new session')
+				case 'can-create-account-and-get-new':
+					throw new Error('Can create account and get new session')
+				default:
+					exhaustiveGuard(sessionData.response.attentionType)
+			}
+		}
+
+		this.playgroundSessionId = sessionData.response.playgroundSessionId
+		const interval = 500
+		const max = Math.ceil(this.timeout / interval)
+
+		for (let i = 0; i < max; i++) {
+			const detailsData = await api.getRunningPlaygroundSessionDetails({
+				params: {
+					playgroundSessionId: this.playgroundSessionId,
+					isWaitingForUpscale: false,
+					playgroundType: 'PlaygroundSnippet',
+					playgroundSnippetId
+				}
+			})
+
+			if (detailsData.response.isWaitingForUpscale === false) {
+				this.containerDetails = detailsData.response.containerDetails
+				// Establish WebSocket connection
+				if (this.containerDetails != null) {
+					if (this.isConnected()) {
+						throw new Error('WebSocket already connected')
+					} // TODO: check if we need to throw here
+					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
+					this.ws = new SandboxWebSocket({
+						url: wsUrl,
+						token: this.containerDetails.playgroundContainerAccessToken
+					})
+					await this.ws.connect()
+
+					await this.ws.waitForNextFutureWebSocketEvent({
+						eventType: 'ContainerServerReady',
+						timeout: 10000
+					}) 
 				}
 				return
 			}

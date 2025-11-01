@@ -19,11 +19,12 @@ async function main() {
 
 	try {
 		// Connect and wait for repository to clone
-		await sandbox.connect({
+		const snippetId = await sandbox.create({
 			shouldBackupFilesystem: true,
 			gitRepoUrl: 'https://github.com/gautamtayal1/perpetual-trading'
 		})
 		console.log('Connected to sandbox')
+		console.log('Snippet ID:', snippetId)
 
 		// List cloned files
 		const { stdout } = await sandbox.runCommand({
@@ -57,6 +58,8 @@ async function main() {
 			args: ['/home/damner/code/perpetual-trading/test.js'],
 			onStdout: data => console.log(data.trim())
 		})
+
+		await new Promise(resolve => setTimeout(resolve, 10000))
 	} finally {
 		// Always disconnect to clean up resources
 		await sandbox.disconnect()
