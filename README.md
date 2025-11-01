@@ -1,17 +1,6 @@
 # @fermion-app/sandbox
 
-A TypeScript SDK for creating and managing isolated code execution environments. This SDK provides a high-level interface to create containers, execute commands, and manage files in secure sandbox environments.
-
-## Features
-
-- 🚀 Create isolated sandbox containers on-demand
-- 💻 Execute commands with streaming or complete output
-- 📁 File operations (read, write) with binary support
-- 🌐 Public URLs for ports 3000, 1337, 1338 - run web servers and share instantly
-- 🔌 WebSocket-based real-time communication
-- ♻️ Automatic reconnection and health monitoring
-- 📦 Full TypeScript support with detailed JSDoc
-- 🎯 Type-safe API with discriminated unions
+Secure isolated code execution SDK for Node.js. Run untrusted code, build projects, or host services in ephemeral containers.
 
 ## Installation
 
@@ -19,446 +8,214 @@ A TypeScript SDK for creating and managing isolated code execution environments.
 npm install @fermion-app/sandbox
 ```
 
-Or with yarn:
-
-```bash
-yarn add @fermion-app/sandbox
-```
-
-Or with pnpm:
-
-```bash
-pnpm add @fermion-app/sandbox
-```
-
 ## Quick Start
 
 ```typescript
 import { Sandbox } from '@fermion-app/sandbox'
 
-// Create a sandbox
-const sandbox = await Sandbox.create({
-  apiKey: 'your-api-key'
-})
+// Create sandbox
+const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+await sandbox.create({ shouldBackupFilesystem: false })
 
-// Execute a command
+// Execute commands
 const result = await sandbox.runCommand({
   cmd: 'node',
   args: ['--version']
 })
 console.log(result.stdout)
 
-// Write a file
-await sandbox.setFile({
-  path: '/home/user/script.js',
+// Write and read files
+await sandbox.writeFile({
+  path: '~/script.js',
   content: 'console.log("Hello World")'
 })
 
-// Read a file
-const fileBuffer = await sandbox.getFile('/home/user/script.js')
-const text = new TextDecoder().decode(fileBuffer)
-console.log(text)
+const response = await sandbox.getFile('~/script.js')
+const content = await response.text()
 
 // Clean up
 await sandbox.disconnect()
 ```
 
-## API Reference
+## Key Features
 
-### `Sandbox.create(options)`
+- **Isolated containers** - Secure Linux environments for code execution
+- **Real-time streaming** - WebSocket-based command output streaming
+- **File operations** - Read/write files with binary support
+- **Public URLs** - Expose ports 3000, 1337, 1338 for web services
+- **Git support** - Clone repositories on container startup
+- **TypeScript** - Full type safety and IntelliSense
 
-Creates and initializes a new sandbox instance.
+## Core API
 
-**Parameters:**
-- `options.apiKey` (string, **required**): API key for authentication
-- `options.gitRepoUrl` (string, optional): Git repository URL to clone on startup
-- `options.shouldBackupFilesystem` (boolean, optional): Whether to persist filesystem after shutdown
+### Creating a Sandbox
 
-**Returns:** `Promise<Sandbox>` - A fully initialized sandbox instance
-
-**Throws:**
-- Error if container provisioning times out (30 seconds)
-- Error if session creation fails
-
-**Example:**
 ```typescript
-const sandbox = await Sandbox.create({
-  apiKey: 'your-key',
-  gitRepoUrl: 'https://github.com/user/repo.git',
-  shouldBackupFilesystem: true
+const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+
+// New container
+await sandbox.create({
+  shouldBackupFilesystem: false,  // Persist filesystem after shutdown
+  gitRepoUrl: 'https://github.com/user/repo.git'  // Optional
 })
+
+// Or connect to existing
+await sandbox.fromSnippet('snippet-id')
 ```
 
-### Instance Methods
+### Running Commands
 
-#### `runCommand(options): Promise<{ stdout: string; stderr: string }>`
-
-Executes a short command and waits for completion.
-
-**Use case:** Quick commands that complete within seconds (file operations, simple scripts)
-
-**Parameters:**
-- `options.cmd` (string, required): Command to execute
-- `options.args` (string[], optional): Command arguments
-
-**Returns:** `Promise<{ stdout: string; stderr: string }>`
-
-**Example:**
 ```typescript
-const result = await sandbox.runCommand({
+// Quick commands (< 5 seconds)
+const { stdout, stderr } = await sandbox.runCommand({
   cmd: 'ls',
-  args: ['-la', '/home/user']
+  args: ['-la']
 })
-console.log(result.stdout)
-console.log(result.stderr)
-```
 
-#### `runStreamingCommand(options): Promise<{stdout: string, stderr: string, exitCode: number}>`
-
-Executes a long-running command with streaming output.
-
-**Use case:** Build processes, servers, watchers, or any command with continuous output
-
-**Parameters:**
-- `options.cmd` (string, required): Command to execute
-- `options.args` (string[], required): Command arguments
-- `options.stdin` (string, optional): Standard input to pipe to the command
-- `options.onStdout` ((data: string) => void, optional): Callback for stdout chunks as they arrive
-- `options.onStderr` ((data: string) => void, optional): Callback for stderr chunks as they arrive
-
-**Returns:** `Promise<{stdout: string, stderr: string, exitCode: number}>` - Resolves when command completes with accumulated output and exit code
-
-**Example:**
-```typescript
-const {stdout, stderr, exitCode} = await sandbox.runStreamingCommand({
+// Long-running with streaming
+const { stdout, stderr, exitCode } = await sandbox.runStreamingCommand({
   cmd: 'npm',
-  args: ['install', 'express'],
-  onStdout: (data) => console.log(data.trim()),
-  onStderr: (data) => console.log(data.trim())
+  args: ['install'],
+  onStdout: (data) => console.log(data),
+  onStderr: (data) => console.error(data)
 })
-console.log('Exit code:', exitCode)
 ```
 
-#### `getFile(path: string): Promise<ArrayBuffer>`
+### File Operations
 
-Retrieves a file from the container filesystem.
-
-**Parameters:**
-- `path` (string, required): Absolute path to the file
-
-**Returns:** `Promise<ArrayBuffer>` - File contents as ArrayBuffer
-
-**Throws:**
-- Error if file not found (404)
-- Error if container not initialized
-
-**Example:**
 ```typescript
-// Read text file
-const buffer = await sandbox.getFile('/home/user/output.txt')
-const text = new TextDecoder().decode(buffer)
-
-// Read binary file
-const imageBuffer = await sandbox.getFile('/home/user/image.png')
-```
-
-#### `setFile(options): Promise<void>`
-
-Writes a file to the container filesystem.
-
-**Parameters:**
-- `options.path` (string, required): Absolute path where file should be written
-- `options.content` (string | ArrayBuffer, required): File content
-
-**Throws:**
-- Error if container not initialized
-- Error if write fails
-
-**Example:**
-```typescript
-// Write text file
-await sandbox.setFile({
-  path: '/home/user/script.js',
+// Write file
+await sandbox.writeFile({
+  path: '~/app.js',
   content: 'console.log("Hello")'
 })
 
-// Write binary file
-const buffer = new Uint8Array([1, 2, 3, 4]).buffer
-await sandbox.setFile({
-  path: '/home/user/data.bin',
-  content: buffer
-})
+// Read file
+const response = await sandbox.getFile('~/app.js')
+const text = await response.text()
+const buffer = await response.arrayBuffer()
 ```
 
-#### `disconnect(): Promise<void>`
+### Web Services
 
-Disconnects from the container and cleans up resources.
-
-**Important:** Always call this when done to free up resources.
-
-**Example:**
 ```typescript
-await sandbox.disconnect()
-```
-
-#### `isConnected(): boolean`
-
-Checks if the WebSocket connection is active.
-
-**Returns:** `boolean` - true if connected, false otherwise
-
-#### `getSessionId(): string | null`
-
-Gets the current playground session ID.
-
-**Returns:** `string | null` - Session ID or null if not initialized
-
-#### `getContainerDetails(): ContainerDetails | null`
-
-Gets the container connection details.
-
-**Returns:** `ContainerDetails | null` - Details including subdomain and access token, or null if not initialized
-
-#### `getPublicUrl(port: number): string`
-
-Gets the public URL for a specific port.
-
-**Parameters:**
-- `port` (number, required): Port number - must be 3000, 1337, or 1338
-
-**Returns:** `string` - Public HTTPS URL for the specified port
-
-**Throws:**
-- Error if container not initialized
-- Error if port is not supported
-
-**Example:**
-```typescript
-// Start a web server on port 3000
+// Start a server
 await sandbox.runStreamingCommand({
   cmd: 'node',
-  args: ['-e', 'require("http").createServer((req,res) => res.end("Hello")).listen(3000)']
+  args: ['server.js']
 })
 
-// Get the public URL
-const url = sandbox.getPublicUrl(3000)
-console.log(`Visit: ${url}`)
-// Output: https://abc123-3000.run-code.com
+// Get public URL
+const url = await sandbox.exposePort(3000)
+console.log(`Live at: ${url}`)
+// https://abc123-3000.run-code.com
 ```
 
-#### `exportPort(port: 3000 | 1337 | 1338): Promise<string>`
+## Examples
 
-Exports a port to the public internet.
-
-**Parameters:**
-- `port` (number, required): Port number - must be 3000, 1337, or 1338
-
-**Returns:** `Promise<string>` - Public HTTPS URL for the specified port
-
-## Complete Examples
-
-### Deploying a Web Application with Public URL
+### Run a Node.js Project
 
 ```typescript
-import { Sandbox } from '@fermion-app/sandbox'
-
-const sandbox = await Sandbox.create({
-  apiKey: process.env.FERMION_API_KEY
-})
-
-// Create a simple Express server
-await sandbox.setFile({
-  path: '/home/user/server.js',
-  content: `
-    const http = require('http');
-    const server = http.createServer((req, res) => {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end('<h1>Hello from Fermion Sandbox!</h1>');
-    });
-    server.listen(3000, () => {
-      console.log('Server running on port 3000');
-    });
-  `
-})
-
-// Start the server in background
-await sandbox.runStreamingCommand({
-  cmd: 'node',
-  args: ['server.js'],
-  onStdout: (data) => console.log(data.trim()),
-  onStderr: (data) => console.error(data.trim())
-})
-
-// Get the public URL
-const publicUrl = sandbox.getPublicUrl(3000)
-console.log(`🚀 Your app is live at: ${publicUrl}`)
-
-// Or get all available URLs
-const allUrls = sandbox.getPublicUrls()
-console.log('Available ports:', allUrls)
-
-// Keep the sandbox running...
-// When done: await sandbox.disconnect()
-```
-
-### Running a Build Process
-
-```typescript
-import { Sandbox } from '@fermion-app/sandbox'
-
-const sandbox = await Sandbox.create({
-  apiKey: process.env.FERMION_API_KEY,
+const sandbox = new Sandbox({ apiKey: process.env.API_KEY })
+await sandbox.create({
   gitRepoUrl: 'https://github.com/user/node-app.git'
 })
 
-// Install dependencies with streaming output
-const { exitCode } = await sandbox.runStreamingCommand({
+// Install and build
+await sandbox.runStreamingCommand({
   cmd: 'npm',
   args: ['install'],
   onStdout: (data) => process.stdout.write(data)
 })
-if (exitCode === 0) console.log('✓ Dependencies installed')
 
-// Run build
-const buildResult = await sandbox.runCommand({
+await sandbox.runCommand({
   cmd: 'npm',
   args: ['run', 'build']
 })
 
-if (buildResult.stderr) {
-  console.error('Build errors:', buildResult.stderr)
-}
+// Start server
+sandbox.runStreamingCommand({
+  cmd: 'npm',
+  args: ['start']
+})
 
-// Get build output
-const distFiles = await sandbox.getFile('/home/user/dist/index.js')
-console.log(new TextDecoder().decode(distFiles))
-
-await sandbox.disconnect()
+const url = await sandbox.exposePort(3000)
+console.log(`App running at: ${url}`)
 ```
 
-### Processing Files
+### Process Files
 
 ```typescript
-const sandbox = await Sandbox.create({
-  apiKey: process.env.FERMION_API_KEY
+// Upload input
+await sandbox.writeFile({
+  path: '~/input.json',
+  content: JSON.stringify({ values: [1, 2, 3] })
 })
 
-// Write input data
-await sandbox.setFile({
-  path: '/home/user/input.json',
-  content: JSON.stringify({ data: [1, 2, 3] })
-})
-
-// Create processing script
-await sandbox.setFile({
-  path: '/home/user/process.js',
-  content: `
-    const fs = require('fs')
-    const data = JSON.parse(fs.readFileSync('input.json', 'utf8'))
-    const result = data.data.map(x => x * 2)
-    fs.writeFileSync('output.json', JSON.stringify(result))
-  `
-})
-
-// Execute
+// Process
 await sandbox.runCommand({
   cmd: 'node',
-  args: ['process.js']
+  args: ['-e', `
+    const fs = require('fs');
+    const data = JSON.parse(fs.readFileSync('input.json'));
+    const result = data.values.map(x => x * 2);
+    fs.writeFileSync('output.json', JSON.stringify(result));
+  `]
 })
 
-// Read result
-const resultBuffer = await sandbox.getFile('/home/user/output.json')
-const result = JSON.parse(new TextDecoder().decode(resultBuffer))
+// Get result
+const response = await sandbox.getFile('~/output.json')
+const result = await response.json()
 console.log(result) // [2, 4, 6]
+```
 
-await sandbox.disconnect()
+## API Reference
+
+### Constructor
+- `new Sandbox({ apiKey })` - Initialize client
+
+### Methods
+- `create(options)` - Create new container
+- `fromSnippet(id)` - Connect to existing container
+- `runCommand(options)` - Execute command (< 5s)
+- `runStreamingCommand(options)` - Execute with streaming
+- `writeFile(options)` - Write file to container
+- `getFile(path)` - Read file from container
+- `exposePort(port)` - Get public URL for port
+- `disconnect()` - Clean up resources
+- `isConnected()` - Check connection status
+
+## File Paths
+
+All paths must start with `~` (home) or `/home/damner/code`:
+- `~/file.js` → `/home/damner/code/file.js`
+- `/home/damner/code/app/index.js` → absolute path
+
+## Supported Ports
+
+Public URLs available for:
+- Port 3000
+- Port 1337
+- Port 1338
+
+## Error Handling
+
+```typescript
+try {
+  await sandbox.create({ shouldBackupFilesystem: false })
+} catch (error) {
+  if (error.message.includes('Provisioning timeout')) {
+    // Container took too long to start
+  }
+}
 ```
 
 ## Development
 
-### Setup
-
 ```bash
-# Install dependencies
-pnpm install
-
-# Build the project
-pnpm build
-
-# Run the example
-pnpm test
-
-# Type check
-pnpm typecheck
-
-# Lint code
-pnpm lint
-```
-
-### Project Structure
-
-```
-fermion-sandbox/
-├── src/
-│   ├── index.ts        # Main Sandbox class
-│   ├── websocket.ts    # WebSocket communication layer
-│   ├── api-client.ts   # HTTP API client
-│   ├── constants.ts    # Type definitions
-│   └── example.ts      # Usage examples
-├── dist/               # Compiled output (generated)
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-## How It Works
-
-1. **Provisioning**: When you call `Sandbox.create()`, the SDK:
-   - Creates a playground snippet via HTTP API
-   - Starts a playground session
-   - Polls until container is ready (30s timeout)
-   - Establishes WebSocket connection
-   - Optionally clones git repository
-
-2. **Communication**: The SDK uses:
-   - **HTTP (HTTPS)** for file operations via static-server endpoint
-   - **WebSocket (WSS)** for command execution and real-time events
-   - **Health pings** every 30 seconds to keep connections alive
-   - **Automatic reconnection** if connection drops
-
-3. **Command Execution**:
-   - **Quick commands** (`runCommand`): Request → Complete response
-   - **Streaming commands** (`runStreamingCommand`): Start → Stream events → Close event
-
-## TypeScript Support
-
-The SDK is written in TypeScript and provides full type definitions:
-
-```typescript
-import type {
-  Sandbox,
-  WebSocketRequestPayload,
-  WebSocketResponsePayload,
-  ContainerDetails
-} from '@fermion-app/sandbox'
-```
-
-All methods are fully documented with JSDoc for IntelliSense support.
-
-## Error Handling
-
-The SDK throws descriptive errors:
-
-```typescript
-try {
-  const sandbox = await Sandbox.create({
-    apiKey: 'invalid-key'
-  })
-} catch (error) {
-  if (error.message.includes('Provisioning timeout')) {
-    console.error('Container took too long to start')
-  }
-}
+npm install    # Install dependencies
+npm run build  # Build the package
+npm test       # Run examples
 ```
 
 ## License
@@ -467,4 +224,4 @@ MIT
 
 ## Support
 
-For issues and questions, please open an issue on the GitHub repository.
+For issues and questions, visit [GitHub Issues](https://github.com/fermion-app/sandbox/issues).

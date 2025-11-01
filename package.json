@@ -25,11 +25,11 @@
 		"pretty": "prettier --write \"**/*.{ts,tsx,json,yml,yaml}\" --log-level warn"
 	},
 	"repository": {
-  "type": "git",
-  "url": "https://github.com/fermion-app/sandbox.git"
-  },
+		"type": "git",
+		"url": "https://github.com/fermion-app/sandbox.git"
+	},
 	"bugs": {
-  "url": "https://github.com/fermion-app/sandbox/issues"
+		"url": "https://github.com/fermion-app/sandbox/issues"
 	},
 	"homepage": "https://docs.fermion.app/",
 	"files": [

@@ -327,7 +327,7 @@ export class Sandbox {
 	 */
 	async fromSnippet(playgroundSnippetId: string) {
 		const api = new ApiClient(this.apiKey)
-		
+
 		const sessionData = await api.startPlaygroundSession({
 			playgroundSnippetId
 		})
@@ -376,7 +376,7 @@ export class Sandbox {
 					await this.ws.waitForNextFutureWebSocketEvent({
 						eventType: 'ContainerServerReady',
 						timeout: 10000
-					}) 
+					})
 				}
 				return
 			}
