@@ -1,5 +1,11 @@
 import { SandboxWebSocket } from './websocket'
-import { ApiClient, type ContainerDetails } from './api-client'
+import {
+	ApiClient,
+	type ContainerDetails,
+	type RunConfig,
+	type DsaExecutionResult,
+	type DsaCodeExecutionEntry
+} from './api-client'
 
 /**
  * Type guard to ensure exhaustive checks in switch statements
@@ -11,6 +17,37 @@ function exhaustiveGuard(_value: never): never {
 	throw new Error(
 		`ERROR! Reached forbidden guard function with unexpected value: ${JSON.stringify(_value)}`
 	)
+}
+
+/**
+ * Encodes a string to Base64URL format (URL-safe Base64)
+ * Base64URL encoding replaces + with -, / with _, and removes padding =
+ * @param str - String to encode
+ * @returns Base64URL encoded string
+ * @public
+ */
+export function encodeBase64Url(str: string): string {
+	// Node.js Buffer for base64 encoding
+	const base64 = Buffer.from(str, 'utf-8').toString('base64')
+	// Convert to URL-safe Base64URL format
+	return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/**
+ * Decodes a Base64URL string to a regular string
+ * @param base64Url - Base64URL encoded string
+ * @returns Decoded string
+ * @public
+ */
+export function decodeBase64Url(base64Url: string): string {
+	// Convert from URL-safe Base64URL to standard Base64
+	let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+	// Add padding if needed
+	while (base64.length % 4 !== 0) {
+		base64 += '='
+	}
+	// Decode from base64
+	return Buffer.from(base64, 'base64').toString('utf-8')
 }
 
 /**
@@ -796,5 +833,159 @@ export class Sandbox {
 		} else {
 			throw new Error('No container found')
 		}
+	}
+
+	/**
+	 * Executes code using the DSA execution API and returns the results
+	 *
+	 * @remarks
+	 * This method provides a simple way to execute code in various languages without
+	 * needing to set up a full sandbox container. It uses Fermion's DSA execution API
+	 * which handles code compilation and execution in isolated environments.
+	 *
+	 * The method:
+	 * 1. Submits the code for execution
+	 * 2. Polls for results until execution completes
+	 * 3. Returns the execution results including stdout, stderr, and exit code
+	 *
+	 * All source code, stdin, and expected output must be Base64URL encoded. The method
+	 * handles encoding for you, or you can provide pre-encoded strings.
+	 *
+	 * @param options - Code execution options
+	 * @param options.language - Programming language (C, C++, Java, Python, Node.js, SQLite, MySQL, Go, Rust, .NET)
+	 * @param options.sourceCode - Source code to execute (will be Base64URL encoded automatically)
+	 * @param options.stdin - Optional standard input for the program (will be Base64URL encoded automatically)
+	 * @param options.expectedOutput - Optional expected output for validation (will be Base64URL encoded automatically)
+	 * @param options.runConfig - Optional execution configuration (timeouts, memory limits, etc.)
+	 * @param options.pollInterval - Optional polling interval in milliseconds (default: 1000ms)
+	 * @param options.maxPollAttempts - Optional maximum polling attempts (default: 30)
+	 *
+	 * @returns Promise that resolves with the execution result
+	 *
+	 * @throws {Error} If code submission fails
+	 * @throws {Error} If polling timeout is reached
+	 * @throws {Error} If API key is not set
+	 *
+	 * @example
+	 * ```typescript
+	 * // Simple Python execution
+	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * const result = await sandbox.quickRun({
+	 *   language: 'Python',
+	 *   sourceCode: 'print("Hello, World!")'
+	 * })
+	 * console.log(result.runResult?.programRunData.stdoutBase64UrlEncoded) // Base64URL encoded output
+	 * console.log(decodeBase64Url(result.runResult.programRunData.stdoutBase64UrlEncoded)) // "Hello, World!"
+	 *
+	 * // C++ with input and expected output
+	 * const result = await sandbox.quickRun({
+	 *   language: 'C++',
+	 *   sourceCode: `
+	 *     #include <iostream>
+	 *     using namespace std;
+	 *     int main() {
+	 *       int a, b;
+	 *       cin >> a >> b;
+	 *       cout << a + b << endl;
+	 *       return 0;
+	 *     }
+	 *   `,
+	 *   stdin: '5 3',
+	 *   expectedOutput: '8'
+	 * })
+	 * console.log(result.runResult?.runStatus) // "successful" or "wrong-answer"
+	 * ```
+	 *
+	 * @public
+	 */
+	async quickRun(options: {
+		language: 'C' | 'C++' | 'Java' | 'Python' | 'Node.js' | 'SQLite' | 'MySQL' | 'Go' | 'Rust' | '.NET'
+		sourceCode: string
+		stdin?: string
+		expectedOutput?: string,
+		additionalFilesAsZip?: string
+	}): Promise<DsaExecutionResult> {
+		const api = new ApiClient(this.apiKey)
+
+		const languageMap: Record<string, DsaCodeExecutionEntry['language']> = {
+			'C': 'C',
+			'C++': 'Cpp',
+			'Java': 'Java',
+			'Python': 'Python',
+			'Node.js': 'Nodejs',
+			'SQLite': 'Sqlite_3_48_0',
+			'Go': 'Golang_1_19',
+			'Rust': 'Rust_1_87',
+			'.NET': 'Dotnet_8',
+			'MySQL': 'Mysql_8'
+		}
+		
+		const language: DsaCodeExecutionEntry['language'] = languageMap[options.language]
+		const sourceCodeEncoded = encodeBase64Url(options.sourceCode)
+		const stdinEncoded = options.stdin ? encodeBase64Url(options.stdin) : ''
+		const expectedOutputEncoded = options.expectedOutput ? encodeBase64Url(options.expectedOutput) : ''
+
+		const runConfig: RunConfig = {
+			customMatcherToUseForExpectedOutput: 'ExactMatch',
+			expectedOutputAsBase64UrlEncoded: expectedOutputEncoded,
+			stdinStringAsBase64UrlEncoded: stdinEncoded,
+			shouldEnablePerProcessAndThreadCpuTimeLimit: false,
+			shouldEnablePerProcessAndThreadMemoryLimit: false,
+			shouldAllowInternetAccess: false,
+			compilerFlagString: '',
+			maxFileSizeInKilobytesFilesCreatedOrModified: 51200,
+			stackSizeLimitInKilobytes: 65536,
+			cpuTimeLimitInMilliseconds: 2000,
+			wallTimeLimitInMilliseconds: 5000,
+			memoryLimitInKilobyte: 512000,
+			maxProcessesAndOrThreads: 60
+		}
+
+		const executionResponse = await api.requestDsaExecution({
+			data: {
+				entries: [
+					{
+						language,
+						runConfig,
+						sourceCodeAsBase64UrlEncoded: sourceCodeEncoded,
+						additionalFilesAsZip: options.additionalFilesAsZip
+							? {
+									type: 'base64url-encoding',
+									base64UrlEncodedZip: options.additionalFilesAsZip
+							  }
+							: undefined
+					}
+				]
+			}
+		})
+
+		const taskId = executionResponse.data.taskIds[0]
+		if (!taskId) {
+			throw new Error('No task ID returned from execution request')
+		}
+
+		const pollInterval = 500
+		const maxAttempts = 60
+
+		for (let i = 0; i < maxAttempts; i++) {
+			const resultResponse = await api.getDsaExecutionResult({
+				data: {
+					taskUniqueIds: [taskId]
+				}
+			})
+
+			const result = resultResponse.data.tasks[0]
+			if (!result) {
+				throw new Error('No result returned from result request')
+			}
+
+			if (result.codingTaskStatus === 'Finished') {
+				return result
+			}
+
+			await new Promise(resolve => setTimeout(resolve, pollInterval))
+		}
+
+		throw new Error(`Polling timeout: Execution did not complete after ${maxAttempts} attempts`)
 	}
 }

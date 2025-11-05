@@ -91,6 +91,131 @@ type GetRunningPlaygroundSessionDetailsOutput = z.infer<
 
 export type ContainerDetails = z.infer<typeof containerDetailsSchema>
 
+const runConfigSchema = z.object({
+	customMatcherToUseForExpectedOutput: z.string().default('ExactMatch'),
+	expectedOutputAsBase64UrlEncoded: z.string().default(''),
+	stdinStringAsBase64UrlEncoded: z.string().default(''),
+	callbackUrlOnExecutionCompletion: z.string().nullable().optional(),
+	shouldEnablePerProcessAndThreadCpuTimeLimit: z.boolean().default(false),
+	shouldEnablePerProcessAndThreadMemoryLimit: z.boolean().default(false),
+	shouldAllowInternetAccess: z.boolean().default(false),
+	compilerFlagString: z.string().default(''),
+	maxFileSizeInKilobytesFilesCreatedOrModified: z.number().default(51200),
+	stackSizeLimitInKilobytes: z.number().default(65536),
+	cpuTimeLimitInMilliseconds: z.number().default(2000),
+	wallTimeLimitInMilliseconds: z.number().default(5000),
+	memoryLimitInKilobyte: z.number().default(512000),
+	maxProcessesAndOrThreads: z.number().default(60)
+})
+
+const dsaCodeExecutionEntrySchema = z.object({
+	language: z.enum([
+		'C',
+		'Cpp',
+		'Java',
+		'Python',
+		'Nodejs',
+		'Sqlite_3_48_0',
+		'Mysql_8',
+		'Golang_1_19',
+		'Rust_1_87',
+		'Dotnet_8'
+	]),
+	runConfig: runConfigSchema,
+	sourceCodeAsBase64UrlEncoded: z.string(),
+	additionalFilesAsZip: z
+		.object({
+			type: z.literal('base64url-encoding'),
+			base64UrlEncodedZip: z.string()
+		})
+		.optional()
+})
+
+const requestDsaExecutionInputSchema = z.object({
+	data: z.object({
+		entries: z.array(dsaCodeExecutionEntrySchema)
+	})
+})
+
+const requestDsaExecutionOutputSchema = z.object({
+	status: z.literal('ok'),
+	data: z.object({
+		taskIds: z.array(z.string())
+	})
+})
+
+const getDsaExecutionResultInputSchema = z.object({
+	data: z.object({
+		taskUniqueIds: z.array(z.string())
+	})
+})
+
+const programRunDataSchema = z.object({
+	cpuTimeUsedInMilliseconds: z.number(),
+	wallTimeUsedInMilliseconds: z.number(),
+	memoryUsedInKilobyte: z.number(),
+	exitSignal: z.number().nullable(),
+	exitCode: z.number(),
+	stdoutBase64UrlEncoded: z.string(),
+	stderrBase64UrlEncoded: z.string()
+})
+
+const runResultSchema = z.object({
+	compilerOutputAfterCompilationBase64UrlEncoded: z.string().nullable(),
+	finishedAt: z.string().nullable(),
+	runStatus: z
+		.enum([
+			'successful',
+			'compilation-error',
+			'time-limit-exceeded',
+			'wrong-answer',
+			'non-zero-exit-code',
+			'died-sigsev',
+			'died-sigxfsz',
+			'died-sigfpe',
+			'died-sigabrt',
+			'internal-isolate-error',
+			'unknown'
+		])
+		.nullable(),
+	programRunData: programRunDataSchema.nullable()
+})
+
+const dsaExecutionResultSchema = z.object({
+	taskUniqueId: z.string(),
+	language: z.string(),
+	runConfig: runConfigSchema,
+	codingTaskStatus: z.enum(['Pending', 'Processing', 'Finished']),
+	runResult: runResultSchema.nullable()
+})
+
+const getDsaExecutionResultOutputSchema = z.object({
+	status: z.literal('ok'),
+	data: z.object({
+		tasks: z.array(dsaExecutionResultSchema)
+	})
+})
+
+// Wrapper schemas for API responses
+const requestDsaExecutionResponseSchema = z.object({
+	output: requestDsaExecutionOutputSchema
+})
+
+const getDsaExecutionResultResponseSchema = z.object({
+	output: getDsaExecutionResultOutputSchema
+})
+
+// Types used in index.ts (public API)
+export type RunConfig = z.infer<typeof runConfigSchema>
+export type DsaCodeExecutionEntry = z.infer<typeof dsaCodeExecutionEntrySchema>
+export type DsaExecutionResult = z.infer<typeof dsaExecutionResultSchema>
+
+// Types only used internally in api-client.ts (not exported)
+type RequestDsaExecutionInput = z.infer<typeof requestDsaExecutionInputSchema>
+type RequestDsaExecutionOutput = z.infer<typeof requestDsaExecutionOutputSchema>
+type GetDsaExecutionResultInput = z.infer<typeof getDsaExecutionResultInputSchema>
+type GetDsaExecutionResultOutput = z.infer<typeof getDsaExecutionResultOutputSchema>
+
 export class ApiClient {
 	private readonly baseUrl = 'https://backend.codedamn.com/api'
 	private apiKey: string
@@ -188,5 +313,66 @@ export class ApiClient {
 			inputSchema: getRunningPlaygroundSessionDetailsInputSchema,
 			outputSchema: getRunningPlaygroundSessionDetailsOutputSchema
 		})
+	}
+
+	async requestDsaExecution(
+		params: RequestDsaExecutionInput
+	): Promise<RequestDsaExecutionOutput> {
+		const requestBody = { data: [{ data: params.data }] }
+
+		const response = await fetch(
+			'https://backend.codedamn.com/api/public/request-dsa-code-execution-batch',
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'FERMION-API-KEY': this.apiKey
+				},
+				body: JSON.stringify(requestBody)
+			}
+		)
+
+		if (!response.ok) {
+			const errorText = await response.text()
+			throw new Error(
+				`DSA execution request failed: ${errorText}`
+			)
+		}
+
+		const rawResponse = await response.json()
+
+		if (Array.isArray(rawResponse) && rawResponse[0]?.output?.status === 'error') {
+			throw new Error(`DSA API Error: ${rawResponse[0].output.errorMessage}`)
+		}
+
+		const parsedResponse = z.array(requestDsaExecutionResponseSchema).parse(rawResponse)
+		return parsedResponse[0].output
+	}
+
+	async getDsaExecutionResult(
+		params: GetDsaExecutionResultInput
+	): Promise<GetDsaExecutionResultOutput> {
+		const response = await fetch(
+			'https://backend.codedamn.com/api/public/get-dsa-code-execution-result-batch',
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'FERMION-API-KEY': this.apiKey
+				},
+				body: JSON.stringify({ data: [{ data: params.data }] })
+			}
+		)
+
+		if (!response.ok) {
+			const errorText = await response.text()
+			throw new Error(
+				`DSA execution result request failed: ${response.status} ${response.statusText}\n${errorText}`
+			)
+		}
+
+		const rawResponse = await response.json()
+		const parsedResponse = z.array(getDsaExecutionResultResponseSchema).parse(rawResponse)
+		return parsedResponse[0].output
 	}
 }
