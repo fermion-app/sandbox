@@ -899,31 +899,42 @@ export class Sandbox {
 	 * @public
 	 */
 	async quickRun(options: {
-		runtime: 'C' | 'C++' | 'Java' | 'Python' | 'Node.js' | 'SQLite' | 'MySQL' | 'Go' | 'Rust' | '.NET'
+		runtime:
+			| 'C'
+			| 'C++'
+			| 'Java'
+			| 'Python'
+			| 'Node.js'
+			| 'SQLite'
+			| 'MySQL'
+			| 'Go'
+			| 'Rust'
+			| '.NET'
 		sourceCode: string
 		stdin?: string
-		expectedOutput?: string,
+		expectedOutput?: string
 		additionalFilesAsZip?: string
 	}): Promise<DsaExecutionResult> {
 		const api = new ApiClient(this.apiKey)
 
 		const runtimeMap: Record<string, DsaCodeExecutionEntry['language']> = {
-			'C': 'C',
+			C: 'C',
 			'C++': 'Cpp',
-			'Java': 'Java',
-			'Python': 'Python',
+			Java: 'Java',
+			Python: 'Python',
 			'Node.js': 'Nodejs',
-			'SQLite': 'Sqlite_3_48_0',
-			'Go': 'Golang_1_19',
-			'Rust': 'Rust_1_87',
+			SQLite: 'Sqlite_3_48_0',
+			Go: 'Golang_1_19',
+			Rust: 'Rust_1_87',
 			'.NET': 'Dotnet_8',
-			'MySQL': 'Mysql_8'
+			MySQL: 'Mysql_8'
 		}
-		
+
 		const runtime: DsaCodeExecutionEntry['language'] = runtimeMap[options.runtime]
 		const sourceCodeEncoded = encodeBase64Url(options.sourceCode)
-		const stdinEncoded = options.stdin ? encodeBase64Url(options.stdin) : ''
-		const expectedOutputEncoded = options.expectedOutput ? encodeBase64Url(options.expectedOutput) : ''
+		const stdinEncoded = options.stdin != null ? encodeBase64Url(options.stdin) : ''
+		const expectedOutputEncoded =
+			options.expectedOutput != null ? encodeBase64Url(options.expectedOutput) : ''
 
 		const runConfig: RunConfig = {
 			customMatcherToUseForExpectedOutput: 'ExactMatch',
@@ -952,7 +963,7 @@ export class Sandbox {
 							? {
 									type: 'base64url-encoding',
 									base64UrlEncodedZip: options.additionalFilesAsZip
-							  }
+								}
 							: undefined
 					}
 				]
