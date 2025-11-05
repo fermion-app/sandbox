@@ -434,7 +434,7 @@ export class Sandbox {
 	 * @example
 	 * ```typescript
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
-	 * await sandbox.connect()
+	 * await sandbox.create({ shouldBackupFilesystem: false })
 	 * // ... do work ...
 	 * await sandbox.disconnect()
 	 * ```
@@ -845,33 +845,31 @@ export class Sandbox {
 	 *
 	 * The method:
 	 * 1. Submits the code for execution
-	 * 2. Polls for results until execution completes
+	 * 2. Polls for results until execution completes (500ms intervals, max 60 attempts)
 	 * 3. Returns the execution results including stdout, stderr, and exit code
 	 *
-	 * All source code, stdin, and expected output must be Base64URL encoded. The method
-	 * handles encoding for you, or you can provide pre-encoded strings.
+	 * All source code, stdin, and expected output are automatically Base64URL encoded by this method.
 	 *
 	 * @param options - Code execution options
-	 * @param options.language - Programming language (C, C++, Java, Python, Node.js, SQLite, MySQL, Go, Rust, .NET)
+	 * @param options.runtime - Programming language runtime (C, C++, Java, Python, Node.js, SQLite, MySQL, Go, Rust, .NET)
 	 * @param options.sourceCode - Source code to execute (will be Base64URL encoded automatically)
 	 * @param options.stdin - Optional standard input for the program (will be Base64URL encoded automatically)
 	 * @param options.expectedOutput - Optional expected output for validation (will be Base64URL encoded automatically)
-	 * @param options.runConfig - Optional execution configuration (timeouts, memory limits, etc.)
-	 * @param options.pollInterval - Optional polling interval in milliseconds (default: 1000ms)
-	 * @param options.maxPollAttempts - Optional maximum polling attempts (default: 30)
+	 * @param options.additionalFilesAsZip - Optional Base64URL-encoded zip file containing additional files needed for execution
 	 *
-	 * @returns Promise that resolves with the execution result
+	 * @returns Promise that resolves with the execution result containing run status, stdout/stderr (Base64URL encoded), resource usage, and compilation errors
 	 *
 	 * @throws {Error} If code submission fails
-	 * @throws {Error} If polling timeout is reached
+	 * @throws {Error} If polling timeout is reached (30 seconds / 60 attempts)
 	 * @throws {Error} If API key is not set
+	 * @throws {Error} If no task ID is returned from execution request
 	 *
 	 * @example
 	 * ```typescript
 	 * // Simple Python execution
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
 	 * const result = await sandbox.quickRun({
-	 *   language: 'Python',
+	 *   runtime: 'Python',
 	 *   sourceCode: 'print("Hello, World!")'
 	 * })
 	 * console.log(result.runResult?.programRunData.stdoutBase64UrlEncoded) // Base64URL encoded output
@@ -879,7 +877,7 @@ export class Sandbox {
 	 *
 	 * // C++ with input and expected output
 	 * const result = await sandbox.quickRun({
-	 *   language: 'C++',
+	 *   runtime: 'C++',
 	 *   sourceCode: `
 	 *     #include <iostream>
 	 *     using namespace std;
@@ -894,6 +892,14 @@ export class Sandbox {
 	 *   expectedOutput: '8'
 	 * })
 	 * console.log(result.runResult?.runStatus) // "successful" or "wrong-answer"
+	 * console.log(result.codingTaskStatus) // "Finished"
+	 *
+	 * // Go with additional files
+	 * const result = await sandbox.quickRun({
+	 *   runtime: 'Go',
+	 *   sourceCode: 'package main\nimport "fmt"\nfunc main() { fmt.Println("Hello") }',
+	 *   additionalFilesAsZip: 'base64url-encoded-zip-content'
+	 * })
 	 * ```
 	 *
 	 * @public
