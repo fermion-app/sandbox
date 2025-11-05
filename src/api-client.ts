@@ -196,15 +196,6 @@ const getDsaExecutionResultOutputSchema = z.object({
 	})
 })
 
-// Wrapper schemas for API responses
-const requestDsaExecutionResponseSchema = z.object({
-	output: requestDsaExecutionOutputSchema
-})
-
-const getDsaExecutionResultResponseSchema = z.object({
-	output: getDsaExecutionResultOutputSchema
-})
-
 // Types used in index.ts (public API)
 export type RunConfig = z.infer<typeof runConfigSchema>
 export type DsaCodeExecutionEntry = z.infer<typeof dsaCodeExecutionEntrySchema>
@@ -318,61 +309,24 @@ export class ApiClient {
 	async requestDsaExecution(
 		params: RequestDsaExecutionInput
 	): Promise<RequestDsaExecutionOutput> {
-		const requestBody = { data: [{ data: params.data }] }
-
-		const response = await fetch(
-			'https://backend.codedamn.com/api/public/request-dsa-code-execution-batch',
-			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'FERMION-API-KEY': this.apiKey
-				},
-				body: JSON.stringify(requestBody)
-			}
-		)
-
-		if (!response.ok) {
-			const errorText = await response.text()
-			throw new Error(
-				`DSA execution request failed: ${errorText}`
-			)
-		}
-
-		const rawResponse = await response.json()
-
-		if (Array.isArray(rawResponse) && rawResponse[0]?.output?.status === 'error') {
-			throw new Error(`DSA API Error: ${rawResponse[0].output.errorMessage}`)
-		}
-
-		const parsedResponse = z.array(requestDsaExecutionResponseSchema).parse(rawResponse)
-		return parsedResponse[0].output
+		return this.call({
+			functionName: 'request-dsa-code-execution',
+			data: params,
+			namespace: 'public',
+			inputSchema: requestDsaExecutionInputSchema,
+			outputSchema: requestDsaExecutionOutputSchema
+		})
 	}
 
 	async getDsaExecutionResult(
 		params: GetDsaExecutionResultInput
 	): Promise<GetDsaExecutionResultOutput> {
-		const response = await fetch(
-			'https://backend.codedamn.com/api/public/get-dsa-code-execution-result-batch',
-			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'FERMION-API-KEY': this.apiKey
-				},
-				body: JSON.stringify({ data: [{ data: params.data }] })
-			}
-		)
-
-		if (!response.ok) {
-			const errorText = await response.text()
-			throw new Error(
-				`DSA execution result request failed: ${response.status} ${response.statusText}\n${errorText}`
-			)
-		}
-
-		const rawResponse = await response.json()
-		const parsedResponse = z.array(getDsaExecutionResultResponseSchema).parse(rawResponse)
-		return parsedResponse[0].output
+		return this.call({
+			functionName: 'get-dsa-code-execution-result',
+			data: params,
+			namespace: 'public',
+			inputSchema: getDsaExecutionResultInputSchema,
+			outputSchema: getDsaExecutionResultOutputSchema
+		})
 	}
 }

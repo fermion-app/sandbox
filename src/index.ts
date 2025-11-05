@@ -899,7 +899,7 @@ export class Sandbox {
 	 * @public
 	 */
 	async quickRun(options: {
-		language: 'C' | 'C++' | 'Java' | 'Python' | 'Node.js' | 'SQLite' | 'MySQL' | 'Go' | 'Rust' | '.NET'
+		runtime: 'C' | 'C++' | 'Java' | 'Python' | 'Node.js' | 'SQLite' | 'MySQL' | 'Go' | 'Rust' | '.NET'
 		sourceCode: string
 		stdin?: string
 		expectedOutput?: string,
@@ -907,7 +907,7 @@ export class Sandbox {
 	}): Promise<DsaExecutionResult> {
 		const api = new ApiClient(this.apiKey)
 
-		const languageMap: Record<string, DsaCodeExecutionEntry['language']> = {
+		const runtimeMap: Record<string, DsaCodeExecutionEntry['language']> = {
 			'C': 'C',
 			'C++': 'Cpp',
 			'Java': 'Java',
@@ -920,7 +920,7 @@ export class Sandbox {
 			'MySQL': 'Mysql_8'
 		}
 		
-		const language: DsaCodeExecutionEntry['language'] = languageMap[options.language]
+		const runtime: DsaCodeExecutionEntry['language'] = runtimeMap[options.runtime]
 		const sourceCodeEncoded = encodeBase64Url(options.sourceCode)
 		const stdinEncoded = options.stdin ? encodeBase64Url(options.stdin) : ''
 		const expectedOutputEncoded = options.expectedOutput ? encodeBase64Url(options.expectedOutput) : ''
@@ -945,7 +945,7 @@ export class Sandbox {
 			data: {
 				entries: [
 					{
-						language,
+						language: runtime,
 						runConfig,
 						sourceCodeAsBase64UrlEncoded: sourceCodeEncoded,
 						additionalFilesAsZip: options.additionalFilesAsZip
