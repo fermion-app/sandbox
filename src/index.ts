@@ -953,24 +953,22 @@ export class Sandbox {
 		}
 
 		const executionResponse = await api.requestDsaExecution({
-			data: {
-				entries: [
-					{
-						language: runtime,
-						runConfig,
-						sourceCodeAsBase64UrlEncoded: sourceCodeEncoded,
-						additionalFilesAsZip: options.additionalFilesAsZip
-							? {
-									type: 'base64url-encoding',
-									base64UrlEncodedZip: options.additionalFilesAsZip
-								}
-							: undefined
-					}
-				]
-			}
+			entries: [
+				{
+					language: runtime,
+					runConfig,
+					sourceCodeAsBase64UrlEncoded: sourceCodeEncoded,
+					additionalFilesAsZip: options.additionalFilesAsZip
+						? {
+								type: 'base64url-encoding',
+								base64UrlEncodedZip: options.additionalFilesAsZip
+							}
+						: undefined
+				}
+			]
 		})
 
-		const taskId = executionResponse.data.taskIds[0]
+		const taskId = executionResponse.taskIds[0]
 		if (!taskId) {
 			throw new Error('No task ID returned from execution request')
 		}
@@ -980,12 +978,10 @@ export class Sandbox {
 
 		for (let i = 0; i < maxAttempts; i++) {
 			const resultResponse = await api.getDsaExecutionResult({
-				data: {
-					taskUniqueIds: [taskId]
-				}
+				taskUniqueIds: [taskId]
 			})
 
-			const result = resultResponse.data.tasks[0]
+			const result = resultResponse.tasks[0]
 			if (!result) {
 				throw new Error('No result returned from result request')
 			}

@@ -132,22 +132,15 @@ const dsaCodeExecutionEntrySchema = z.object({
 })
 
 const requestDsaExecutionInputSchema = z.object({
-	data: z.object({
-		entries: z.array(dsaCodeExecutionEntrySchema)
-	})
+	entries: z.array(dsaCodeExecutionEntrySchema)
 })
 
 const requestDsaExecutionOutputSchema = z.object({
-	status: z.literal('ok'),
-	data: z.object({
-		taskIds: z.array(z.string())
-	})
+	taskIds: z.array(z.string())
 })
 
 const getDsaExecutionResultInputSchema = z.object({
-	data: z.object({
-		taskUniqueIds: z.array(z.string())
-	})
+	taskUniqueIds: z.array(z.string())
 })
 
 const programRunDataSchema = z.object({
@@ -183,6 +176,7 @@ const runResultSchema = z.object({
 
 const dsaExecutionResultSchema = z.object({
 	taskUniqueId: z.string(),
+	sourceCodeAsBase64UrlEncoded: z.string().optional(),
 	language: z.string(),
 	runConfig: runConfigSchema,
 	codingTaskStatus: z.enum(['Pending', 'Processing', 'Finished']),
@@ -190,10 +184,7 @@ const dsaExecutionResultSchema = z.object({
 })
 
 const getDsaExecutionResultOutputSchema = z.object({
-	status: z.literal('ok'),
-	data: z.object({
-		tasks: z.array(dsaExecutionResultSchema)
-	})
+	tasks: z.array(dsaExecutionResultSchema)
 })
 
 // Types used in index.ts (public API)
@@ -310,7 +301,7 @@ export class ApiClient {
 		params: RequestDsaExecutionInput
 	): Promise<RequestDsaExecutionOutput> {
 		return this.call({
-			functionName: 'request-dsa-code-execution',
+			functionName: 'request-dsa-code-execution-batch',
 			data: params,
 			namespace: 'public',
 			inputSchema: requestDsaExecutionInputSchema,
@@ -322,7 +313,7 @@ export class ApiClient {
 		params: GetDsaExecutionResultInput
 	): Promise<GetDsaExecutionResultOutput> {
 		return this.call({
-			functionName: 'get-dsa-code-execution-result',
+			functionName: 'get-dsa-code-execution-result-batch',
 			data: params,
 			namespace: 'public',
 			inputSchema: getDsaExecutionResultInputSchema,
