@@ -872,8 +872,9 @@ export class Sandbox {
 	 *   runtime: 'Python',
 	 *   sourceCode: 'print("Hello, World!")'
 	 * })
-	 * console.log(result.runResult?.programRunData.stdoutBase64UrlEncoded) // Base64URL encoded output
-	 * console.log(decodeBase64Url(result.runResult.programRunData.stdoutBase64UrlEncoded)) // "Hello, World!"
+	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // Base64URL encoded output
+	 * console.log(decodeBase64Url(result.programRunData.stdoutBase64UrlEncoded)) // "Hello, World!"
+	 * console.log(result.runStatus) // "successful"
 	 *
 	 * // C++ with input and expected output
 	 * const result = await sandbox.quickRun({
@@ -891,8 +892,8 @@ export class Sandbox {
 	 *   stdin: '5 3',
 	 *   expectedOutput: '8'
 	 * })
-	 * console.log(result.runResult?.runStatus) // "successful" or "wrong-answer"
-	 * console.log(result.codingTaskStatus) // "Finished"
+	 * console.log(result.runStatus) // "successful" or "wrong-answer"
+	 * const output = decodeBase64Url(result.programRunData.stdoutBase64UrlEncoded) // "8"
 	 *
 	 * // Go with additional files
 	 * const result = await sandbox.quickRun({
@@ -920,7 +921,7 @@ export class Sandbox {
 		stdin?: string
 		expectedOutput?: string
 		additionalFilesAsZip?: string
-	}): Promise<DsaExecutionResult> {
+	}): Promise<DsaExecutionResult['runResult']> {
 		const api = new ApiClient(this.apiKey)
 
 		const runtimeMap: Record<string, DsaCodeExecutionEntry['language']> = {
@@ -993,7 +994,10 @@ export class Sandbox {
 			}
 
 			if (result.codingTaskStatus === 'Finished') {
-				return result
+				if (!result.runResult) {
+					throw new Error('Execution finished but no result was returned')
+				}
+				return result.runResult
 			}
 
 			await new Promise(resolve => setTimeout(resolve, pollInterval))
