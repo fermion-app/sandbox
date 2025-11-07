@@ -19,15 +19,15 @@ await sandbox.create({ shouldBackupFilesystem: false })
 
 // Execute commands
 const result = await sandbox.runCommand({
-  cmd: 'node',
-  args: ['--version']
+	cmd: 'node',
+	args: ['--version']
 })
 console.log(result.stdout)
 
 // Write and read files
 await sandbox.writeFile({
-  path: '~/script.js',
-  content: 'console.log("Hello World")'
+	path: '~/script.js',
+	content: 'console.log("Hello World")'
 })
 
 const response = await sandbox.getFile('~/script.js')
@@ -55,8 +55,8 @@ const sandbox = new Sandbox({ apiKey: 'your-api-key' })
 
 // New container
 await sandbox.create({
-  shouldBackupFilesystem: false,  // Persist filesystem after shutdown
-  gitRepoUrl: 'https://github.com/user/repo.git'  // Optional
+	shouldBackupFilesystem: false, // Persist filesystem after shutdown
+	gitRepoUrl: 'https://github.com/user/repo.git' // Optional
 })
 
 // Or connect to existing
@@ -68,16 +68,16 @@ await sandbox.fromSnippet('snippet-id')
 ```typescript
 // Quick commands (< 5 seconds)
 const { stdout, stderr } = await sandbox.runCommand({
-  cmd: 'ls',
-  args: ['-la']
+	cmd: 'ls',
+	args: ['-la']
 })
 
 // Long-running with streaming
 const { stdout, stderr, exitCode } = await sandbox.runStreamingCommand({
-  cmd: 'npm',
-  args: ['install'],
-  onStdout: (data) => console.log(data),
-  onStderr: (data) => console.error(data)
+	cmd: 'npm',
+	args: ['install'],
+	onStdout: data => console.log(data),
+	onStderr: data => console.error(data)
 })
 ```
 
@@ -86,8 +86,8 @@ const { stdout, stderr, exitCode } = await sandbox.runStreamingCommand({
 ```typescript
 // Write file
 await sandbox.writeFile({
-  path: '~/app.js',
-  content: 'console.log("Hello")'
+	path: '~/app.js',
+	content: 'console.log("Hello")'
 })
 
 // Read file
@@ -101,8 +101,8 @@ const buffer = await response.arrayBuffer()
 ```typescript
 // Start a server
 await sandbox.runStreamingCommand({
-  cmd: 'node',
-  args: ['server.js']
+	cmd: 'node',
+	args: ['server.js']
 })
 
 // Get public URL
@@ -118,25 +118,25 @@ console.log(`Live at: ${url}`)
 ```typescript
 const sandbox = new Sandbox({ apiKey: process.env.API_KEY })
 await sandbox.create({
-  gitRepoUrl: 'https://github.com/user/node-app.git'
+	gitRepoUrl: 'https://github.com/user/node-app.git'
 })
 
 // Install and build
 await sandbox.runStreamingCommand({
-  cmd: 'npm',
-  args: ['install'],
-  onStdout: (data) => process.stdout.write(data)
+	cmd: 'npm',
+	args: ['install'],
+	onStdout: data => process.stdout.write(data)
 })
 
 await sandbox.runCommand({
-  cmd: 'npm',
-  args: ['run', 'build']
+	cmd: 'npm',
+	args: ['run', 'build']
 })
 
 // Start server
 sandbox.runStreamingCommand({
-  cmd: 'npm',
-  args: ['start']
+	cmd: 'npm',
+	args: ['start']
 })
 
 const url = await sandbox.exposePort(3000)
@@ -146,9 +146,11 @@ console.log(`App running at: ${url}`)
 ## API Reference
 
 ### Constructor
+
 - `new Sandbox({ apiKey })` - Initialize client
 
 ### Methods
+
 - `create(options)` - Create new container
 - `fromSnippet(id)` - Connect to existing container
 - `runCommand(options)` - Execute command (< 5s)
@@ -161,13 +163,16 @@ console.log(`App running at: ${url}`)
 
 ## File Paths
 
-All paths must start with `~` (home) or `/home/damner/code`:
-- `~/file.js` → `/home/damner/code/file.js`
-- `/home/damner/code/app/index.js` → absolute path
+All paths must start with `~` (home) or `/home/damner`:
+
+- `~/file.js` → `/home/damner/file.js`
+- `/home/damner/app/index.js` → absolute path
+- `/home/damner/code/app/index.js` → also supported (nested under home)
 
 ## Supported Ports
 
 Public URLs available for:
+
 - Port 3000
 - Port 1337
 - Port 1338

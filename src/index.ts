@@ -51,29 +51,6 @@ export function decodeBase64Url(base64Url: string): string {
 }
 
 /**
- * Normalizes file paths for the sandbox environment
- * - Expands ~ to /home/damner/code
- * - Validates that path starts with either ~ or /home/damner/code
- * @internal
- * @param path - The input path (must start with ~ or /home/damner/code)
- * @returns Normalized path
- * @throws {Error} If path doesn't start with ~ or /home/damner/code
- */
-function normalizePath(path: string): string {
-	let normalizedPath
-
-	if (path.startsWith('~')) {
-		normalizedPath = path.replace(/^~/, '/home/damner/code')
-	} else if (path.startsWith('/home/damner/code')) {
-		normalizedPath = path
-	} else {
-		throw new Error(`Path must start with ~ or /home/damner/code. Got: "${path}".`)
-	}
-
-	return normalizedPath
-}
-
-/**
  * Main Sandbox class for managing isolated code execution containers
  *
  * @remarks
@@ -110,7 +87,7 @@ function normalizePath(path: string): string {
  * })
  * const output = await sandbox.runCommand({
  *   cmd: 'node',
- *   args: ['hello.js']
+ *   args: ['~/hello.js']
  * })
  *
  * // Clean up when done
@@ -242,7 +219,10 @@ export class Sandbox {
 	}: {
 		shouldBackupFilesystem: boolean
 		gitRepoUrl?: string
-	}): Promise<string> {
+	}): Promise<{ playgroundSnippetId: string }> {
+		if (this.isConnected()) {
+			throw new Error('WebSocket already connected')
+		}
 		const api = new ApiClient(this.apiKey)
 
 		const snippetData = await api.createPlaygroundSnippet({
@@ -291,11 +271,7 @@ export class Sandbox {
 
 				// Establish WebSocket connection
 				if (this.containerDetails != null) {
-					if (this.isConnected()) {
-						throw new Error('WebSocket already connected')
-					}
 					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
-
 					this.ws = new SandboxWebSocket({
 						url: wsUrl,
 						token: this.containerDetails.playgroundContainerAccessToken
@@ -317,7 +293,7 @@ export class Sandbox {
 					})
 					console.log(`Git clone completed with exit code: ${exitCode}`)
 				}
-				return this.playgroundSnippetId
+				return { playgroundSnippetId: this.playgroundSnippetId }
 			}
 
 			await new Promise(r => setTimeout(r, interval))
@@ -362,7 +338,10 @@ export class Sandbox {
 	 *
 	 * @public
 	 */
-	async fromSnippet(playgroundSnippetId: string) {
+	async fromSnippet({ playgroundSnippetId }: { playgroundSnippetId: string }) {
+		if (this.isConnected()) {
+			throw new Error('WebSocket already connected')
+		}
 		const api = new ApiClient(this.apiKey)
 
 		const sessionData = await api.startPlaygroundSession({
@@ -400,9 +379,6 @@ export class Sandbox {
 				this.containerDetails = detailsData.response.containerDetails
 				// Establish WebSocket connection
 				if (this.containerDetails != null) {
-					if (this.isConnected()) {
-						throw new Error('WebSocket already connected')
-					}
 					const wsUrl = `wss://${this.containerDetails.subdomain}-13372.run-code.com`
 					this.ws = new SandboxWebSocket({
 						url: wsUrl,
@@ -442,6 +418,11 @@ export class Sandbox {
 	 * @public
 	 */
 	async disconnect(): Promise<void> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		this.ws?.disableWsAutoReconnect()
 
 		if (this.containerDetails != null) {
@@ -463,36 +444,38 @@ export class Sandbox {
 	/**
 	 * Retrieves a file from the container filesystem
 	 *
-	 * @param path - Path to the file. Use ~ for home directory (e.g., "~/file.js") or absolute paths
+	 * @param path - Path to the file (passed as-is to the backend)
 	 * @returns Response object - use .text(), .arrayBuffer(), .blob(), etc.
 	 *
 	 * @throws {Error} If file is not found (404)
 	 * @throws {Error} If container is not initialized
 	 * @throws {Error} If fetch fails
-	 * @throws {Error} If path is not absolute (after ~ expansion)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Get as text with tilde expansion
+	 * // Get as text
 	 * const response = await sandbox.getFile('~/output.txt')
 	 * const text = await response.text()
 	 * console.log(text)
 	 *
 	 * // Get with absolute path
-	 * const response = await sandbox.getFile('/home/damner/code/data.bin')
+	 * const response = await sandbox.getFile('/home/damner/data.bin')
 	 * const buffer = await response.arrayBuffer()
 	 * ```
 	 *
 	 * @public
 	 */
 	async getFile(path: string): Promise<Response> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		if (this.containerDetails != null) {
-			const normalizedPath = normalizePath(path)
-
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', normalizedPath)
+			url.searchParams.append('full-path', path)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -502,7 +485,7 @@ export class Sandbox {
 
 			if (!response.ok) {
 				if (response.status === 404) {
-					throw new Error(`File not found: ${normalizedPath}`)
+					throw new Error(`File not found: ${path}`)
 				}
 				throw new Error(`Failed to get file: ${response.statusText}`)
 			}
@@ -517,16 +500,15 @@ export class Sandbox {
 	 * Writes a file to the container filesystem
 	 *
 	 * @param options - File write options
-	 * @param options.path - Path where the file should be written. Use ~ for home directory (e.g., "~/script.js") or absolute paths
+	 * @param options.path - Path where the file should be written (passed as-is to the backend)
 	 * @param options.content - File content as string or ArrayBuffer
 	 *
 	 * @throws {Error} If container is not initialized
 	 * @throws {Error} If write operation fails
-	 * @throws {Error} If path is not absolute (after ~ expansion)
 	 *
 	 * @example
 	 * ```typescript
-	 * // Write text file with tilde expansion
+	 * // Write text file
 	 * await sandbox.writeFile({
 	 *   path: '~/script.js',
 	 *   content: 'console.log("Hello")'
@@ -534,7 +516,7 @@ export class Sandbox {
 	 *
 	 * // Write with absolute path
 	 * await sandbox.writeFile({
-	 *   path: '/home/damner/code/data.bin',
+	 *   path: '/home/damner/data.bin',
 	 *   content: new Uint8Array([1, 2, 3, 4]).buffer
 	 * })
 	 * ```
@@ -548,13 +530,16 @@ export class Sandbox {
 		path: string
 		content: string | ArrayBuffer
 	}): Promise<void> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		if (this.containerDetails != null) {
-			const normalizedPath = normalizePath(path)
-
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', normalizedPath)
+			url.searchParams.append('full-path', path)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -566,7 +551,8 @@ export class Sandbox {
 			})
 
 			if (!response.ok) {
-				throw new Error(`Failed to set file: ${response.statusText}`)
+				const errorText = await response.text().catch(() => response.statusText)
+				throw new Error(`Failed to set file: ${response.statusText} - ${errorText}`)
 			}
 		} else {
 			throw new Error('No container found')
@@ -617,6 +603,11 @@ export class Sandbox {
 		stderr: string
 		exitCode: number
 	}> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		if (this.ws != null) {
 			const startResponse = await this.ws.send({
 				payload: {
@@ -695,6 +686,11 @@ export class Sandbox {
 		stdout: string
 		stderr: string
 	}> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		if (this.ws != null) {
 			const fullCommand = options.args
 				? `${options.cmd} ${options.args.join(' ')}`
@@ -778,7 +774,7 @@ export class Sandbox {
 	 * // Start the server in the background
 	 * sandbox.runStreamingCommand({
 	 *   cmd: 'node',
-	 *   args: ['server.js'],
+	 *   args: ['~/server.js'],
 	 *   onStdout: (data) => console.log(data)
 	 * })
 	 *
@@ -791,10 +787,15 @@ export class Sandbox {
 	 * @public
 	 */
 	async exposePort(port: 3000 | 1337 | 1338): Promise<string> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		if (this.containerDetails != null) {
 			return `https://${this.containerDetails.subdomain}-${port}.run-code.com`
 		} else {
-			throw new Error('No container found')
+			throw new Error('Not connected to sandbox. Please call create() or fromSnippet() first.')
 		}
 	}
 
@@ -922,6 +923,11 @@ export class Sandbox {
 		expectedOutput?: string
 		additionalFilesAsZip?: string
 	}): Promise<DsaExecutionResult['runResult']> {
+		if (!this.isConnected()) {
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
+		}
 		const api = new ApiClient(this.apiKey)
 
 		const runtimeMap: Record<string, DsaCodeExecutionEntry['language']> = {

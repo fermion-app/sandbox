@@ -255,9 +255,14 @@ export class ApiClient {
 
 		if (apiResponse.output.status === 'error') {
 			const errorMessage = apiResponse.output.errorMessage
-			throw new Error(`API error: ${errorMessage}`)
+			if (
+				errorMessage.includes('Fermion School not found! Please contact support@codedamn.com immediately!')
+			) {
+				throw new Error('Invalid API key')
+			} else {
+				throw new Error(errorMessage)
+			}
 		}
-
 		return apiResponse.output.data
 	}
 
