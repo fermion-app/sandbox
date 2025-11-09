@@ -144,43 +144,41 @@ const getDsaExecutionResultInputSchema = z.object({
 })
 
 const programRunDataSchema = z.object({
-	cpuTimeUsedInMilliseconds: z.number(),
-	wallTimeUsedInMilliseconds: z.number(),
-	memoryUsedInKilobyte: z.number(),
-	exitSignal: z.number().nullable(),
+	cpuTimeUsedInMilliseconds: z.number().int().min(0),
+	wallTimeUsedInMilliseconds: z.number().int().min(0),
+	memoryUsedInKilobyte: z.number().int().min(0),
+	exitSignal: z.number(),
 	exitCode: z.number(),
-	stdoutBase64UrlEncoded: z.string(),
-	stderrBase64UrlEncoded: z.string()
+	stdoutBase64UrlEncoded: z.string().or(z.null()),
+	stderrBase64UrlEncoded: z.string().or(z.null())
 })
 
 const runResultSchema = z.object({
-	compilerOutputAfterCompilationBase64UrlEncoded: z.string().nullable(),
-	finishedAt: z.string().nullable(),
-	runStatus: z
-		.enum([
-			'successful',
-			'compilation-error',
-			'time-limit-exceeded',
-			'wrong-answer',
-			'non-zero-exit-code',
-			'died-sigsev',
-			'died-sigxfsz',
-			'died-sigfpe',
-			'died-sigabrt',
-			'internal-isolate-error',
-			'unknown'
-		])
-		.nullable(),
-	programRunData: programRunDataSchema.nullable()
+	compilerOutputAfterCompilationBase64UrlEncoded: z.string().or(z.null()),
+	finishedAt: z.string(),
+	runStatus: z.enum([
+		'successful',
+		'compilation-error',
+		'time-limit-exceeded',
+		'wrong-answer',
+		'non-zero-exit-code',
+		'died-sigsev',
+		'died-sigxfsz',
+		'died-sigfpe',
+		'died-sigabrt',
+		'internal-isolate-error',
+		'unknown'
+	]),
+	programRunData: programRunDataSchema.or(z.null())
 })
 
 const dsaExecutionResultSchema = z.object({
 	taskUniqueId: z.string(),
-	sourceCodeAsBase64UrlEncoded: z.string().optional(),
+	sourceCodeAsBase64UrlEncoded: z.string(),
 	language: z.string(),
 	runConfig: runConfigSchema,
 	codingTaskStatus: z.enum(['Pending', 'Processing', 'Finished']),
-	runResult: runResultSchema.nullable()
+	runResult: runResultSchema.or(z.null())
 })
 
 const getDsaExecutionResultOutputSchema = z.object({
@@ -256,7 +254,9 @@ export class ApiClient {
 		if (apiResponse.output.status === 'error') {
 			const errorMessage = apiResponse.output.errorMessage
 			if (
-				errorMessage.includes('Fermion School not found! Please contact support@codedamn.com immediately!')
+				errorMessage.includes(
+					'Fermion School not found! Please contact support@codedamn.com immediately!'
+				)
 			) {
 				throw new Error('Invalid API key')
 			} else {

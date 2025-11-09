@@ -16,19 +16,19 @@ async function main() {
 		// List cloned files
 		const { stdout } = await sandbox.runCommand({
 			cmd: 'ls',
-			args: ['-la', '/home/damner/code/perpetual-trading']
+			args: ['-la', '/home/damner/perpetual-trading']
 		})
 		console.log('Repository contents:', stdout)
 
 		// Read package.json
-		const response = await sandbox.getFile('/home/damner/code/perpetual-trading/package.json')
+		const response = await sandbox.getFile('/home/damner/perpetual-trading/package.json')
 		const packageJson = JSON.parse(await response.text())
 		console.log('Project name:', packageJson.name)
 
 		// Install dependencies
 		const { exitCode } = await sandbox.runStreamingCommand({
 			cmd: 'bash',
-			args: ['-c', 'cd /home/damner/code/perpetual-trading && pnpm install'],
+			args: ['-c', 'cd /home/damner/perpetual-trading && pnpm install'],
 			onStdout: data => process.stdout.write(data),
 			onStderr: data => process.stderr.write(data)
 		})
@@ -36,13 +36,13 @@ async function main() {
 
 		// Create and run a test file
 		await sandbox.writeFile({
-			path: '/home/damner/code/perpetual-trading/test.js',
+			path: '/home/damner/perpetual-trading/test.js',
 			content: 'console.log("Hello from sandbox")'
 		})
 
 		await sandbox.runStreamingCommand({
 			cmd: 'node',
-			args: ['/home/damner/code/perpetual-trading/test.js'],
+			args: ['/home/damner/perpetual-trading/test.js'],
 			onStdout: data => console.log(data.trim())
 		})
 	} finally {

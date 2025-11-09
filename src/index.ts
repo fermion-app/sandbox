@@ -37,9 +37,9 @@ export function encodeBase64Url(str: string): string {
  * Decodes a Base64URL string to a regular string
  * @param base64Url - Base64URL encoded string
  * @returns Decoded string
- * @public
+ * @internal
  */
-export function decodeBase64Url(base64Url: string): string {
+function decodeBase64Url(base64Url: string): string {
 	// Convert from URL-safe Base64URL to standard Base64
 	let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
 	// Add padding if needed
@@ -795,7 +795,9 @@ export class Sandbox {
 		if (this.containerDetails != null) {
 			return `https://${this.containerDetails.subdomain}-${port}.run-code.com`
 		} else {
-			throw new Error('Not connected to sandbox. Please call create() or fromSnippet() first.')
+			throw new Error(
+				'Not connected to sandbox. Please call create() or fromSnippet() first.'
+			)
 		}
 	}
 
@@ -1003,7 +1005,34 @@ export class Sandbox {
 				if (!result.runResult) {
 					throw new Error('Execution finished but no result was returned')
 				}
-				return result.runResult
+				const runResult: DsaExecutionResult['runResult'] = {
+					runStatus: result.runResult.runStatus,
+					compilerOutputAfterCompilationBase64UrlEncoded: result.runResult.compilerOutputAfterCompilationBase64UrlEncoded != null
+						? decodeBase64Url(
+								result.runResult.compilerOutputAfterCompilationBase64UrlEncoded
+							)
+						: null,
+					finishedAt: result.runResult.finishedAt,
+					programRunData: result.runResult.programRunData
+						? {
+								stdoutBase64UrlEncoded: decodeBase64Url(
+									result.runResult.programRunData.stdoutBase64UrlEncoded ?? ''
+								),
+								stderrBase64UrlEncoded: decodeBase64Url(
+									result.runResult.programRunData.stderrBase64UrlEncoded ?? ''
+								),
+								exitCode: result.runResult.programRunData.exitCode,
+								cpuTimeUsedInMilliseconds:
+									result.runResult.programRunData.cpuTimeUsedInMilliseconds,
+								wallTimeUsedInMilliseconds:
+									result.runResult.programRunData.wallTimeUsedInMilliseconds,
+								memoryUsedInKilobyte:
+									result.runResult.programRunData.memoryUsedInKilobyte,
+								exitSignal: result.runResult.programRunData.exitSignal
+							}
+						: null
+				}
+				return runResult
 			}
 
 			await new Promise(resolve => setTimeout(resolve, pollInterval))
