@@ -3,7 +3,7 @@ import {
 	ApiClient,
 	type ContainerDetails,
 	type RunConfig,
-	type DsaExecutionResult,
+	type DecodedRunResult,
 	type DsaCodeExecutionEntry
 } from './api-client'
 
@@ -934,7 +934,7 @@ export class Sandbox {
 	 * @returns Promise that resolves with the execution result containing:
 	 *   - runStatus: Execution status (e.g., "successful", "wrong-answer", "time-limit-exceeded")
 	 *   - programRunData: Object with decoded stdout/stderr (as strings, not Base64URL), exit code, resource usage
-	 *   - compilerOutputAfterCompilationBase64UrlEncoded: Decoded compiler output (as string, not Base64URL) or null
+	 *   - compilerOutputAfterCompilation: Decoded compiler output (as string, not Base64URL) or null
 	 *   - finishedAt: Timestamp when execution finished
 	 *
 	 * @throws {Error} If not connected to sandbox (requires create() or fromSnippet() to be called first)
@@ -954,7 +954,7 @@ export class Sandbox {
 	 *   sourceCode: 'print("Hello, World!")'
 	 * })
 	 * // stdout/stderr are already decoded - no need to decode manually
-	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // "Hello, World!\n"
+	 * console.log(result.programRunData?.stdout) // "Hello, World!\n"
 	 * console.log(result.runStatus) // "successful"
 	 *
 	 * // C++ with input and expected output
@@ -974,7 +974,7 @@ export class Sandbox {
 	 *   expectedOutput: '8'
 	 * })
 	 * console.log(result.runStatus) // "successful" or "wrong-answer"
-	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // "8\n" (already decoded)
+	 * console.log(result.programRunData?.stdout) // "8\n" (already decoded)
 	 *
 	 * // Go with additional files
 	 * const result = await sandbox.quickRun({
@@ -1002,7 +1002,7 @@ export class Sandbox {
 		stdin?: string
 		expectedOutput?: string
 		additionalFilesAsZip?: string
-	}): Promise<DsaExecutionResult['runResult']> {
+	}): Promise<DecodedRunResult> {
 		if (!this.isConnected()) {
 			throw new Error(
 				'Not connected to sandbox. Please call create() or fromSnippet() first.'
@@ -1083,9 +1083,9 @@ export class Sandbox {
 				if (!result.runResult) {
 					throw new Error('Execution finished but no result was returned')
 				}
-				const runResult: DsaExecutionResult['runResult'] = {
+				const runResult: DecodedRunResult = {
 					runStatus: result.runResult.runStatus,
-					compilerOutputAfterCompilationBase64UrlEncoded:
+					compilerOutputAfterCompilation:
 						result.runResult.compilerOutputAfterCompilationBase64UrlEncoded != null
 							? decodeBase64Url(
 									result.runResult.compilerOutputAfterCompilationBase64UrlEncoded
@@ -1094,10 +1094,10 @@ export class Sandbox {
 					finishedAt: result.runResult.finishedAt,
 					programRunData: result.runResult.programRunData
 						? {
-								stdoutBase64UrlEncoded: decodeBase64Url(
+								stdout: decodeBase64Url(
 									result.runResult.programRunData.stdoutBase64UrlEncoded ?? ''
 								),
-								stderrBase64UrlEncoded: decodeBase64Url(
+								stderr: decodeBase64Url(
 									result.runResult.programRunData.stderrBase64UrlEncoded ?? ''
 								),
 								exitCode: result.runResult.programRunData.exitCode,

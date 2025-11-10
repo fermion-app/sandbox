@@ -189,6 +189,21 @@ const getDsaExecutionResultOutputSchema = z.object({
 export type RunConfig = z.infer<typeof runConfigSchema>
 export type DsaCodeExecutionEntry = z.infer<typeof dsaCodeExecutionEntrySchema>
 export type DsaExecutionResult = z.infer<typeof dsaExecutionResultSchema>
+export type DecodedRunResult = Omit<
+	NonNullable<DsaExecutionResult['runResult']>,
+	'compilerOutputAfterCompilationBase64UrlEncoded' | 'programRunData'
+> & {
+	compilerOutputAfterCompilation: string | null
+	programRunData: NonNullable<DsaExecutionResult['runResult']>['programRunData'] extends infer PD
+		? PD extends null
+			? null
+			: Omit<NonNullable<PD>, 'stdoutBase64UrlEncoded' | 'stderrBase64UrlEncoded'> & {
+					stdout: string
+					stderr: string
+				}
+		: never
+}
+
 
 // Types only used internally in api-client.ts (not exported)
 type RequestDsaExecutionInput = z.infer<typeof requestDsaExecutionInputSchema>
