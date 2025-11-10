@@ -1,6 +1,6 @@
 {
 	"name": "@fermion-app/sandbox",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"description": "Secure isolated code execution sandbox SDK",
 	"main": "dist/index.js",
 	"module": "dist/index.mjs",
