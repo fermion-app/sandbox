@@ -62,7 +62,7 @@ async function executePython(sandbox: Sandbox, code: string): Promise<string> {
 
 	try {
 		// Write code to a temporary file in the sandbox with unique name
-		const scriptPath = `/tmp/python_script_${Date.now()}.py`
+		const scriptPath = `/home/damner/python_script_${Date.now()}.py`
 		await sandbox.writeFile({
 			path: scriptPath,
 			content: code
