@@ -12,27 +12,28 @@ async function main() {
 
 	const sandbox = new Sandbox({ apiKey })
 
-  const { playgroundSnippetId } = await sandbox.create({
-    shouldBackupFilesystem: false
-  })
-  console.log('Sandbox created, snippet ID:', playgroundSnippetId)
+	const { playgroundSnippetId } = await sandbox.create({
+		shouldBackupFilesystem: false
+	})
+	console.log('Sandbox created, snippet ID:', playgroundSnippetId)
 
-  await sandbox.writeFile({
-    path: '/home/damner/hello-world.js',
-    content: 'console.log("Hello from Fermion Sandbox!")'
-  })
+	await sandbox.writeFile({
+		path: '/home/damner/hello-world.js',
+		content: 'console.log("Hello from Fermion Sandbox!")'
+	})
 
-  const fileResponse = await sandbox.getFile('/home/damner/hello-world.js')
-  const fileContent = await fileResponse.text()
-  console.log('File contents:')
-  console.log(fileContent)
+	const fileResponse = await sandbox.getFile('/home/damner/hello-world.js')
+	const fileContent = await fileResponse.text()
+	console.log('File contents:')
+	console.log(fileContent)
 
-  const { stdout } = await sandbox.runCommand({
-    cmd: 'node',
-    args: ['~/hello-world.js']
-  })
-  console.log('Output:')
-  console.log(stdout)
+	// ~/ works in command arguments (shell expands it)
+	const { stdout } = await sandbox.runCommand({
+		cmd: 'node',
+		args: ['~/hello-world.js']
+	})
+	console.log('Output:')
+	console.log(stdout)
 
 	await sandbox.disconnect()
 }

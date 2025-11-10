@@ -37,7 +37,7 @@ print(' '.join(map(str, result)))`,
 		})
 
 		if (result?.programRunData) {
-			const stdout = result.programRunData.stdoutBase64UrlEncoded ?? ''
+			const stdout = result.programRunData.stdout
 			console.log('Input: [2, 7, 11, 15], target = 9')
 			console.log('Output:', stdout.trim())
 			console.log('Status:', result.runStatus)

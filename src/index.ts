@@ -51,32 +51,6 @@ function decodeBase64Url(base64Url: string): string {
 }
 
 /**
- * Normalizes a file path by expanding ~ to /home/damner
- *
- * @remarks
- * Paths must start with either ~ or /home/damner. The ~ character is expanded
- * to /home/damner to create an absolute path.
- *
- * @param path - File path starting with ~ or /home/damner
- * @returns Normalized absolute path
- * @throws {Error} If path doesn't start with ~ or /home/damner
- * @internal
- */
-function normalizePath(path: string): string {
-	let normalizedPath
-
-	if (path.startsWith('~')) {
-		normalizedPath = path.replace('~', '/home/damner')
-	} else if (path.startsWith('/home/damner')) {
-		normalizedPath = path
-	} else {
-		throw new Error(`Invalid path: ${path}. Path must start with ~ or /home/damner`)
-	}
-
-	return normalizedPath
-}
-
-/**
  * Main Sandbox class for managing isolated code execution containers
  *
  * @remarks
@@ -108,10 +82,9 @@ function normalizePath(path: string): string {
  *
  * // Write and execute a file
  * await sandbox.writeFile({
- *   path: '~/hello.js',
+ *   path: '/home/damner/hello.js',
  *   content: 'console.log("Hello from sandbox!")'
  * })
- * // Note: Use absolute path for node command since it doesn't expand ~
  * const output = await sandbox.runCommand({
  *   cmd: 'node',
  *   args: ['/home/damner/hello.js']
@@ -479,26 +452,25 @@ export class Sandbox {
 	 * Retrieves a file from the container filesystem
 	 *
 	 * @remarks
-	 * The path is normalized automatically: ~ is expanded to /home/damner.
-	 * Paths must start with either ~ or /home/damner.
+	 * Paths must start with /home/damner. The ~ shorthand is not supported.
 	 *
-	 * @param path - Path to the file (must start with ~ or /home/damner)
+	 * @param path - Path to the file (must start with /home/damner)
 	 * @returns Response object - use .text(), .arrayBuffer(), .blob(), etc.
 	 *
 	 * @throws {Error} If file is not found (404)
 	 * @throws {Error} If container is not initialized
-	 * @throws {Error} If path is invalid (doesn't start with ~ or /home/damner)
+	 * @throws {Error} If path is invalid (doesn't start with /home/damner)
 	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If fetch fails
 	 *
 	 * @example
 	 * ```typescript
-	 * // Get as text using ~ path (automatically normalized)
-	 * const response = await sandbox.getFile('~/output.txt')
+	 * // Get as text
+	 * const response = await sandbox.getFile('/home/damner/output.txt')
 	 * const text = await response.text()
 	 * console.log(text)
 	 *
-	 * // Get with absolute path
+	 * // Get binary file
 	 * const response = await sandbox.getFile('/home/damner/data.bin')
 	 * const buffer = await response.arrayBuffer()
 	 * ```
@@ -511,12 +483,16 @@ export class Sandbox {
 				'Not connected to sandbox. Please call create() or fromSnippet() first.'
 			)
 		}
-		const normalizedPath = normalizePath(path)
+
+		if (!path.startsWith('/home/damner')) {
+			throw new Error('Invalid path. Path must start with /home/damner')
+		}
+
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', normalizedPath)
+			url.searchParams.append('full-path', path)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -541,29 +517,28 @@ export class Sandbox {
 	 * Writes a file to the container filesystem
 	 *
 	 * @remarks
-	 * The path is normalized automatically: ~ is expanded to /home/damner.
-	 * Paths must start with either ~ or /home/damner.
+	 * Paths must start with /home/damner. The ~ shorthand is not supported.
 	 *
 	 * @param options - File write options
-	 * @param options.path - Path where the file should be written (must start with ~ or /home/damner)
+	 * @param options.path - Path where the file should be written (must start with /home/damner)
 	 * @param options.content - File content as string or ArrayBuffer
 	 *
 	 * @returns Promise that resolves when the file is written
 	 *
 	 * @throws {Error} If container is not initialized
-	 * @throws {Error} If path is invalid (doesn't start with ~ or /home/damner)
+	 * @throws {Error} If path is invalid (doesn't start with /home/damner)
 	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If write operation fails
 	 *
 	 * @example
 	 * ```typescript
-	 * // Write text file using ~ path (automatically normalized)
+	 * // Write text file
 	 * await sandbox.writeFile({
-	 *   path: '~/script.js',
+	 *   path: '/home/damner/script.js',
 	 *   content: 'console.log("Hello")'
 	 * })
 	 *
-	 * // Write with absolute path
+	 * // Write binary file
 	 * await sandbox.writeFile({
 	 *   path: '/home/damner/data.bin',
 	 *   content: new Uint8Array([1, 2, 3, 4]).buffer
@@ -585,13 +560,15 @@ export class Sandbox {
 			)
 		}
 
-		const normalizedPath = normalizePath(path)
+		if (!path.startsWith('/home/damner')) {
+			throw new Error('Invalid path. Path must start with /home/damner')
+		}
 
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', normalizedPath)
+			url.searchParams.append('full-path', path)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -619,8 +596,9 @@ export class Sandbox {
 	 * Callbacks are invoked as data arrives. The promise resolves when the command completes,
 	 * returning the accumulated output and exit code.
 	 *
-	 * Note: Paths in command arguments are NOT automatically normalized. If you need to use paths
-	 * with ~, use absolute paths (/home/damner/...) or wrap the command in a shell that expands ~.
+	 * Note: Paths in command arguments can use ~ shorthand (e.g., ~/file.js) as the shell
+	 * will automatically expand it. For file operations (getFile/writeFile), you must use
+	 * the full absolute path starting with /home/damner.
 	 *
 	 * @param options - Command execution options
 	 * @param options.cmd - Command to execute (e.g., 'npm', 'git', 'node')
@@ -646,11 +624,17 @@ export class Sandbox {
 	 * })
 	 * console.log('Exit code:', exitCode)
 	 *
-	 * // Use absolute paths for file arguments
+	 * // ~ paths work in command arguments (shell expands them)
 	 * await sandbox.runStreamingCommand({
 	 *   cmd: 'node',
-	 *   args: ['/home/damner/script.js'],
+	 *   args: ['~/script.js'],
 	 *   onStdout: (data) => console.log(data)
+	 * })
+	 *
+	 * // Note: For file operations (getFile/writeFile), use full paths
+	 * await sandbox.writeFile({
+	 *   path: '/home/damner/script.js',
+	 *   content: 'console.log("Hello")'
 	 * })
 	 * ```
 	 *
@@ -725,8 +709,9 @@ export class Sandbox {
 	 * The promise resolves when the command finishes with both stdout and stderr.
 	 * For long-running commands, use runStreamingCommand() instead.
 	 *
-	 * Note: Paths in command arguments are NOT automatically normalized. If you need to use paths
-	 * with ~, use absolute paths (/home/damner/...) or wrap the command in a shell that expands ~.
+	 * Note: Paths in command arguments can use ~ shorthand (e.g., ~/file.js) as the shell
+	 * will automatically expand it. For file operations (getFile/writeFile), you must use
+	 * the full absolute path starting with /home/damner.
 	 *
 	 * @param options - Command execution options
 	 * @param options.cmd - Command to execute
@@ -740,12 +725,16 @@ export class Sandbox {
 	 *
 	 * @example
 	 * ```typescript
+	 * // ~ paths work in command arguments (shell expands them)
 	 * const result = await sandbox.runCommand({
 	 *   cmd: 'ls',
-	 *   args: ['-la', '/home/damner']
+	 *   args: ['-la', '~/perpetual-trading']
 	 * })
 	 * console.log(result.stdout)
 	 * console.log(result.stderr)
+	 *
+	 * // Note: For file operations (getFile/writeFile), use full paths
+	 * const file = await sandbox.getFile('/home/damner/data.txt')
 	 * ```
 	 *
 	 * @public
@@ -829,7 +818,7 @@ export class Sandbox {
 	 * ```typescript
 	 * // Start a web server on port 3000
 	 * await sandbox.writeFile({
-	 *   path: '~/server.js',
+	 *   path: '/home/damner/server.js',
 	 *   content: `
 	 *     const http = require('http');
 	 *     http.createServer((req, res) => {
@@ -841,7 +830,6 @@ export class Sandbox {
 	 * })
 	 *
 	 * // Start the server in the background
-	 * // Note: Use absolute path since node doesn't expand ~
 	 * sandbox.runStreamingCommand({
 	 *   cmd: 'node',
 	 *   args: ['/home/damner/server.js'],
@@ -931,11 +919,21 @@ export class Sandbox {
 	 * @param options.expectedOutput - Optional expected output for validation (will be Base64URL encoded automatically)
 	 * @param options.additionalFilesAsZip - Optional Base64URL-encoded zip file containing additional files needed for execution
 	 *
-	 * @returns Promise that resolves with the execution result containing:
-	 *   - runStatus: Execution status (e.g., "successful", "wrong-answer", "time-limit-exceeded")
-	 *   - programRunData: Object with decoded stdout/stderr (as strings, not Base64URL), exit code, resource usage
-	 *   - compilerOutputAfterCompilation: Decoded compiler output (as string, not Base64URL) or null
-	 *   - finishedAt: Timestamp when execution finished
+	 * @returns Promise that resolves with DecodedRunResult containing:
+	 *   - runStatus: Execution status. Possible values: "successful", "compilation-error", "time-limit-exceeded",
+	 *     "wrong-answer", "non-zero-exit-code", "died-sigsev", "died-sigxfsz", "died-sigfpe", "died-sigabrt",
+	 *     "internal-isolate-error", or "unknown"
+	 *   - programRunData: Object containing execution metrics and output (null if execution hasn't completed):
+	 *     - stdout: Decoded string containing standard output (already decoded, not Base64URL)
+	 *     - stderr: Decoded string containing standard error (already decoded, not Base64URL)
+	 *     - exitCode: Exit code returned by the program (0 typically indicates success)
+	 *     - exitSignal: Exit signal if process was terminated by a signal, or null otherwise
+	 *     - cpuTimeUsedInMilliseconds: CPU time taken for execution in milliseconds
+	 *     - wallTimeUsedInMilliseconds: Wall-clock time (real time) taken for execution in milliseconds
+	 *     - memoryUsedInKilobyte: Total memory used during execution in kilobytes
+	 *   - compilerOutputAfterCompilation: Decoded compiler output as string (already decoded, not Base64URL) or null
+	 *     (null for interpreted languages or if there's no compiler output)
+	 *   - finishedAt: Timestamp when execution completed in ISO 8601 UTC format (e.g., "2025-11-06T08:14:10.127Z")
 	 *
 	 * @throws {Error} If not connected to sandbox (requires create() or fromSnippet() to be called first)
 	 * @throws {Error} If code submission fails
