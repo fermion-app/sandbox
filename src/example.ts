@@ -16,34 +16,41 @@ async function main() {
 		// List cloned files
 		const { stdout } = await sandbox.runCommand({
 			cmd: 'ls',
-			args: ['-la', '/home/damner/perpetual-trading']
+			args: ['-la', '~/perpetual-trading']
 		})
 		console.log('Repository contents:', stdout)
 
 		// Read package.json
-		const response = await sandbox.getFile('/home/damner/perpetual-trading/package.json')
+		const response = await sandbox.getFile('~/perpetual-trading/package.json')
 		const packageJson = JSON.parse(await response.text())
-		console.log('Project name:', packageJson.name)
+		console.log('Project name:', packageJson)
 
-		// Install dependencies
-		const { exitCode } = await sandbox.runStreamingCommand({
-			cmd: 'bash',
-			args: ['-c', 'cd /home/damner/perpetual-trading && pnpm install'],
-			onStdout: data => process.stdout.write(data),
-			onStderr: data => process.stderr.write(data)
-		})
-		console.log('Installation finished with code:', exitCode)
+		// // Install dependencies
+		// const { exitCode } = await sandbox.runStreamingCommand({
+		// 	cmd: 'bash',
+		// 	args: ['-c', 'cd ~/perpetual-trading && pnpm install'],
+		// 	onStdout: data => process.stdout.write(data),
+		// 	onStderr: data => process.stderr.write(data)
+		// })
+		// console.log('Installation finished with code:', exitCode)
 
 		// Create and run a test file
 		await sandbox.writeFile({
-			path: '/home/damner/perpetual-trading/test.js',
+			path: '~/perpetual-trading/test.js',
 			content: 'console.log("Hello from sandbox")'
 		})
 
-		await sandbox.runStreamingCommand({
+		const fileResponse = await sandbox.getFile('~/perpetual-trading/test.js')
+		console.log('File contents:', await fileResponse.text())
+
+		const {
+			stdout: streamingOutput,
+			stderr,
+			exitCode
+		} = await sandbox.runStreamingCommand({
 			cmd: 'node',
 			args: ['/home/damner/perpetual-trading/test.js'],
-			onStdout: data => console.log(data.trim())
+			onStdout: data => console.log('STDOUT:', data.trim()),
 		})
 	} finally {
 		// Always disconnect to clean up resources

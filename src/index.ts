@@ -51,6 +51,32 @@ function decodeBase64Url(base64Url: string): string {
 }
 
 /**
+ * Normalizes a file path by expanding ~ to /home/damner
+ *
+ * @remarks
+ * Paths must start with either ~ or /home/damner. The ~ character is expanded
+ * to /home/damner to create an absolute path.
+ *
+ * @param path - File path starting with ~ or /home/damner
+ * @returns Normalized absolute path
+ * @throws {Error} If path doesn't start with ~ or /home/damner
+ * @internal
+ */
+function normalizePath(path: string): string {
+	let normalizedPath
+
+	if (path.startsWith('~')) {
+		normalizedPath = path.replace('~', '/home/damner')
+	} else if (path.startsWith('/home/damner')) {
+		normalizedPath = path
+	} else {
+		throw new Error(`Invalid path: ${path}. Path must start with ~ or /home/damner`)
+	}
+
+	return normalizedPath
+}
+
+/**
  * Main Sandbox class for managing isolated code execution containers
  *
  * @remarks
@@ -85,9 +111,10 @@ function decodeBase64Url(base64Url: string): string {
  *   path: '~/hello.js',
  *   content: 'console.log("Hello from sandbox!")'
  * })
+ * // Note: Use absolute path for node command since it doesn't expand ~
  * const output = await sandbox.runCommand({
  *   cmd: 'node',
- *   args: ['~/hello.js']
+ *   args: ['/home/damner/hello.js']
  * })
  *
  * // Clean up when done
@@ -112,7 +139,7 @@ function decodeBase64Url(base64Url: string): string {
  * })
  *
  * // Start a web server and get public URL
- * sandbox.runStreamingCommand({
+ * await sandbox.runStreamingCommand({
  *   cmd: 'npm',
  *   args: ['start']
  * })
@@ -192,6 +219,7 @@ export class Sandbox {
 	 *
 	 * @returns Promise that resolves with the playground snippet ID when the sandbox is ready
 	 *
+	 * @throws {Error} If WebSocket is already connected
 	 * @throws {Error} If container provisioning times out (default: 30 seconds)
 	 * @throws {Error} If session creation fails or requires attention
 	 * @throws {Error} If WebSocket connection fails
@@ -201,11 +229,11 @@ export class Sandbox {
 	 * ```typescript
 	 * // Create basic sandbox
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
-	 * const snippetId = await sandbox.create({ shouldBackupFilesystem: false })
-	 * console.log('Created sandbox with snippet ID:', snippetId)
+	 * const { playgroundSnippetId } = await sandbox.create({ shouldBackupFilesystem: false })
+	 * console.log('Created sandbox with snippet ID:', playgroundSnippetId)
 	 *
 	 * // Create sandbox with git repository
-	 * const snippetId = await sandbox.create({
+	 * const { playgroundSnippetId } = await sandbox.create({
 	 *   shouldBackupFilesystem: true,
 	 *   gitRepoUrl: 'https://github.com/user/repo.git'
 	 * })
@@ -316,7 +344,8 @@ export class Sandbox {
 	 * 3. Establishing WebSocket connection
 	 * 4. Waiting for container server to be ready
 	 *
-	 * @param playgroundSnippetId - The ID of an existing playground snippet
+	 * @param options - Connection options
+	 * @param options.playgroundSnippetId - The ID of an existing playground snippet
 	 *
 	 * @returns Promise that resolves when connected to the sandbox
 	 *
@@ -324,12 +353,13 @@ export class Sandbox {
 	 * @throws {Error} If session creation fails or requires attention
 	 * @throws {Error} If the snippet ID is invalid or not found
 	 * @throws {Error} If WebSocket connection fails
+	 * @throws {Error} If WebSocket is already connected
 	 *
 	 * @example
 	 * ```typescript
 	 * // Connect to existing sandbox
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
-	 * await sandbox.fromSnippet('existing-snippet-id')
+	 * await sandbox.fromSnippet({ playgroundSnippetId: 'existing-snippet-id' })
 	 *
 	 * // Now you can use the sandbox
 	 * const result = await sandbox.runCommand({ cmd: 'ls', args: ['-la'] })
@@ -407,6 +437,10 @@ export class Sandbox {
 	 * This closes the WebSocket connection and notifies the container server.
 	 * Always call this when you're done with the sandbox to free up resources.
 	 *
+	 * @returns Promise that resolves when disconnection is complete
+	 *
+	 * @throws {Error} If not connected to sandbox
+	 *
 	 * @example
 	 * ```typescript
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
@@ -444,16 +478,22 @@ export class Sandbox {
 	/**
 	 * Retrieves a file from the container filesystem
 	 *
-	 * @param path - Path to the file (passed as-is to the backend)
+	 * @remarks
+	 * The path is normalized automatically: ~ is expanded to /home/damner.
+	 * Paths must start with either ~ or /home/damner.
+	 *
+	 * @param path - Path to the file (must start with ~ or /home/damner)
 	 * @returns Response object - use .text(), .arrayBuffer(), .blob(), etc.
 	 *
 	 * @throws {Error} If file is not found (404)
 	 * @throws {Error} If container is not initialized
+	 * @throws {Error} If path is invalid (doesn't start with ~ or /home/damner)
+	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If fetch fails
 	 *
 	 * @example
 	 * ```typescript
-	 * // Get as text
+	 * // Get as text using ~ path (automatically normalized)
 	 * const response = await sandbox.getFile('~/output.txt')
 	 * const text = await response.text()
 	 * console.log(text)
@@ -471,11 +511,12 @@ export class Sandbox {
 				'Not connected to sandbox. Please call create() or fromSnippet() first.'
 			)
 		}
+		const normalizedPath = normalizePath(path)
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', path)
+			url.searchParams.append('full-path', normalizedPath)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -499,16 +540,24 @@ export class Sandbox {
 	/**
 	 * Writes a file to the container filesystem
 	 *
+	 * @remarks
+	 * The path is normalized automatically: ~ is expanded to /home/damner.
+	 * Paths must start with either ~ or /home/damner.
+	 *
 	 * @param options - File write options
-	 * @param options.path - Path where the file should be written (passed as-is to the backend)
+	 * @param options.path - Path where the file should be written (must start with ~ or /home/damner)
 	 * @param options.content - File content as string or ArrayBuffer
 	 *
+	 * @returns Promise that resolves when the file is written
+	 *
 	 * @throws {Error} If container is not initialized
+	 * @throws {Error} If path is invalid (doesn't start with ~ or /home/damner)
+	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If write operation fails
 	 *
 	 * @example
 	 * ```typescript
-	 * // Write text file
+	 * // Write text file using ~ path (automatically normalized)
 	 * await sandbox.writeFile({
 	 *   path: '~/script.js',
 	 *   content: 'console.log("Hello")'
@@ -535,11 +584,14 @@ export class Sandbox {
 				'Not connected to sandbox. Please call create() or fromSnippet() first.'
 			)
 		}
+
+		const normalizedPath = normalizePath(path)
+
 		if (this.containerDetails != null) {
 			const url = new URL(
 				`https://${this.containerDetails.subdomain}-13372.run-code.com/static-server`
 			)
-			url.searchParams.append('full-path', path)
+			url.searchParams.append('full-path', normalizedPath)
 			url.searchParams.append(
 				'playground-container-access-token',
 				this.containerDetails.playgroundContainerAccessToken
@@ -567,6 +619,9 @@ export class Sandbox {
 	 * Callbacks are invoked as data arrives. The promise resolves when the command completes,
 	 * returning the accumulated output and exit code.
 	 *
+	 * Note: Paths in command arguments are NOT automatically normalized. If you need to use paths
+	 * with ~, use absolute paths (/home/damner/...) or wrap the command in a shell that expands ~.
+	 *
 	 * @param options - Command execution options
 	 * @param options.cmd - Command to execute (e.g., 'npm', 'git', 'node')
 	 * @param options.args - Command arguments as array
@@ -577,7 +632,9 @@ export class Sandbox {
 	 * @returns Promise that resolves when command completes with stdout, stderr, and exitCode
 	 *
 	 * @throws {Error} If WebSocket is not connected
+	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If command execution fails to start
+	 * @throws {Error} If unexpected response event type is received
 	 *
 	 * @example
 	 * ```typescript
@@ -588,6 +645,13 @@ export class Sandbox {
 	 *   onStderr: (data) => console.log(data.trim())
 	 * })
 	 * console.log('Exit code:', exitCode)
+	 *
+	 * // Use absolute paths for file arguments
+	 * await sandbox.runStreamingCommand({
+	 *   cmd: 'node',
+	 *   args: ['/home/damner/script.js'],
+	 *   onStdout: (data) => console.log(data)
+	 * })
 	 * ```
 	 *
 	 * @public
@@ -661,6 +725,9 @@ export class Sandbox {
 	 * The promise resolves when the command finishes with both stdout and stderr.
 	 * For long-running commands, use runStreamingCommand() instead.
 	 *
+	 * Note: Paths in command arguments are NOT automatically normalized. If you need to use paths
+	 * with ~, use absolute paths (/home/damner/...) or wrap the command in a shell that expands ~.
+	 *
 	 * @param options - Command execution options
 	 * @param options.cmd - Command to execute
 	 * @param options.args - Optional command arguments
@@ -668,13 +735,14 @@ export class Sandbox {
 	 * @returns Promise with stdout and stderr strings
 	 *
 	 * @throws {Error} If WebSocket is not connected
+	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If response type is unexpected
 	 *
 	 * @example
 	 * ```typescript
 	 * const result = await sandbox.runCommand({
 	 *   cmd: 'ls',
-	 *   args: ['-la', '/home/user']
+	 *   args: ['-la', '/home/damner']
 	 * })
 	 * console.log(result.stdout)
 	 * console.log(result.stderr)
@@ -754,6 +822,7 @@ export class Sandbox {
 	 * @param port - Port number (must be 3000, 1337, or 1338)
 	 * @returns Promise that resolves with the public HTTPS URL for the specified port
 	 *
+	 * @throws {Error} If not connected to sandbox
 	 * @throws {Error} If container is not initialized
 	 *
 	 * @example
@@ -772,9 +841,10 @@ export class Sandbox {
 	 * })
 	 *
 	 * // Start the server in the background
+	 * // Note: Use absolute path since node doesn't expand ~
 	 * sandbox.runStreamingCommand({
 	 *   cmd: 'node',
-	 *   args: ['~/server.js'],
+	 *   args: ['/home/damner/server.js'],
 	 *   onStdout: (data) => console.log(data)
 	 * })
 	 *
@@ -810,7 +880,7 @@ export class Sandbox {
 	 *
 	 * @returns Object mapping port numbers to their public URLs
 	 *
-	 * @throws {Error} If container is not initialized
+	 * @throws {Error} If container is not initialized (no container details available)
 	 *
 	 * @example
 	 * ```typescript
@@ -847,11 +917,12 @@ export class Sandbox {
 	 * which handles code compilation and execution in isolated environments.
 	 *
 	 * The method:
-	 * 1. Submits the code for execution
-	 * 2. Polls for results until execution completes (500ms intervals, max 60 attempts)
-	 * 3. Returns the execution results including stdout, stderr, and exit code
+	 * 1. Submits the code for execution (source code, stdin, and expected output are automatically Base64URL encoded)
+	 * 2. Polls for results until execution completes (500ms intervals, max 60 attempts = 30 seconds)
+	 * 3. Returns the execution results with stdout/stderr automatically decoded from Base64URL
 	 *
-	 * All source code, stdin, and expected output are automatically Base64URL encoded by this method.
+	 * Note: This method requires a sandbox connection (call create() or fromSnippet() first),
+	 * but it doesn't actually use the container - it uses the DSA execution API directly.
 	 *
 	 * @param options - Code execution options
 	 * @param options.runtime - Programming language runtime (C, C++, Java, Python, Node.js, SQLite, MySQL, Go, Rust, .NET)
@@ -860,23 +931,30 @@ export class Sandbox {
 	 * @param options.expectedOutput - Optional expected output for validation (will be Base64URL encoded automatically)
 	 * @param options.additionalFilesAsZip - Optional Base64URL-encoded zip file containing additional files needed for execution
 	 *
-	 * @returns Promise that resolves with the execution result containing run status, stdout/stderr (Base64URL encoded), resource usage, and compilation errors
+	 * @returns Promise that resolves with the execution result containing:
+	 *   - runStatus: Execution status (e.g., "successful", "wrong-answer", "time-limit-exceeded")
+	 *   - programRunData: Object with decoded stdout/stderr (as strings, not Base64URL), exit code, resource usage
+	 *   - compilerOutputAfterCompilationBase64UrlEncoded: Decoded compiler output (as string, not Base64URL) or null
+	 *   - finishedAt: Timestamp when execution finished
 	 *
+	 * @throws {Error} If not connected to sandbox (requires create() or fromSnippet() to be called first)
 	 * @throws {Error} If code submission fails
 	 * @throws {Error} If polling timeout is reached (30 seconds / 60 attempts)
-	 * @throws {Error} If API key is not set
 	 * @throws {Error} If no task ID is returned from execution request
+	 * @throws {Error} If no result is returned from result request
+	 * @throws {Error} If execution finished but no result was returned
 	 *
 	 * @example
 	 * ```typescript
 	 * // Simple Python execution
 	 * const sandbox = new Sandbox({ apiKey: 'your-api-key' })
+	 * await sandbox.create({ shouldBackupFilesystem: false })
 	 * const result = await sandbox.quickRun({
 	 *   runtime: 'Python',
 	 *   sourceCode: 'print("Hello, World!")'
 	 * })
-	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // Base64URL encoded output
-	 * console.log(decodeBase64Url(result.programRunData.stdoutBase64UrlEncoded)) // "Hello, World!"
+	 * // stdout/stderr are already decoded - no need to decode manually
+	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // "Hello, World!\n"
 	 * console.log(result.runStatus) // "successful"
 	 *
 	 * // C++ with input and expected output
@@ -896,7 +974,7 @@ export class Sandbox {
 	 *   expectedOutput: '8'
 	 * })
 	 * console.log(result.runStatus) // "successful" or "wrong-answer"
-	 * const output = decodeBase64Url(result.programRunData.stdoutBase64UrlEncoded) // "8"
+	 * console.log(result.programRunData?.stdoutBase64UrlEncoded) // "8\n" (already decoded)
 	 *
 	 * // Go with additional files
 	 * const result = await sandbox.quickRun({
@@ -1007,11 +1085,12 @@ export class Sandbox {
 				}
 				const runResult: DsaExecutionResult['runResult'] = {
 					runStatus: result.runResult.runStatus,
-					compilerOutputAfterCompilationBase64UrlEncoded: result.runResult.compilerOutputAfterCompilationBase64UrlEncoded != null
-						? decodeBase64Url(
-								result.runResult.compilerOutputAfterCompilationBase64UrlEncoded
-							)
-						: null,
+					compilerOutputAfterCompilationBase64UrlEncoded:
+						result.runResult.compilerOutputAfterCompilationBase64UrlEncoded != null
+							? decodeBase64Url(
+									result.runResult.compilerOutputAfterCompilationBase64UrlEncoded
+								)
+							: null,
 					finishedAt: result.runResult.finishedAt,
 					programRunData: result.runResult.programRunData
 						? {
